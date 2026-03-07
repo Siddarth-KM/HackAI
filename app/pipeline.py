@@ -10,6 +10,7 @@ from app.services.sp500 import get_sp500_stocks, filter_by_sector
 from app.services.gemini import extract_signal, select_stocks, generate_summary
 from app.services.massive import get_stock_returns
 from app.services.alpha_vantage import get_stock_sentiment
+from app.services.charts import generate_returns_chart
 
 
 async def run_pipeline(raw_text: str) -> AnalysisResponse:
@@ -49,7 +50,16 @@ async def run_pipeline(raw_text: str) -> AnalysisResponse:
             average_sentiment=sentiment_data["average_sentiment"],
         )
 
-        stock_analyses.append(StockAnalysis(returns=returns, sentiment=sentiment))
+        chart = generate_returns_chart(
+            ticker=ticker,
+            company_name=returns.company_name,
+            week_return_pct=returns.week_return_pct,
+            month_return_pct=returns.month_return_pct,
+            three_month_return_pct=returns.three_month_return_pct,
+            year_return_pct=returns.year_return_pct,
+        )
+
+        stock_analyses.append(StockAnalysis(returns=returns, sentiment=sentiment, chart_base64=chart))
 
     # Step 5: Generate summary recommendation via Gemini
     analyses_for_summary = [

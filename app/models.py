@@ -35,6 +35,7 @@ class StockSentiment(BaseModel):
 class StockAnalysis(BaseModel):
     returns: StockReturns
     sentiment: StockSentiment
+    chart_base64: str | None = None
 
 
 class AnalysisResponse(BaseModel):
