@@ -112,7 +112,6 @@ function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: 
             transition: 'width 0.5s ease-out, left 0.5s ease-out',
           }}
         />
-        {/* Center line */}
         <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '1px', background: 'rgba(255,255,255,0.15)' }} />
       </div>
       <span style={{ minWidth: '72px', textAlign: 'right', fontWeight: 600, fontSize: '0.9rem', color: barColor }}>
@@ -125,14 +124,54 @@ function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: 
 export default function AnalysisResult({ data }: AnalysisResultProps) {
   const [selectedTimeframe, setSelectedTimeframe] = React.useState<Timeframe>('1M');
   const [showCharts, setShowCharts] = React.useState(false);
+  const [ttsState, setTtsState] = React.useState<'idle' | 'loading' | 'playing'>('idle');
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  // Calculate max absolute value for the selected timeframe for bar scaling
   const returnValues = data.stock_analyses.map(s => getReturnForTimeframe(s.returns, selectedTimeframe)).filter(v => v !== null) as number[];
   const maxAbsValue = returnValues.length > 0 ? Math.max(...returnValues.map(Math.abs), 1) : 1;
 
+  const handleListenToSummary = async () => {
+    if (ttsState === 'playing') {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setTtsState('idle');
+      return;
+    }
+
+    setTtsState('loading');
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.summary_recommendation }),
+      });
+
+      if (!response.ok) throw new Error('TTS request failed');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setTtsState('idle');
+        URL.revokeObjectURL(url);
+      };
+
+      audio.play();
+      setTtsState('playing');
+    } catch (err) {
+      console.error('TTS error:', err);
+      setTtsState('idle');
+    }
+  };
+
   return (
     <div style={{ animation: 'fadeIn 0.5s ease-out', marginTop: '3rem' }}>
-      
+
       {/* 1. Signal Overview */}
       <div className="glass-card mb-8">
         <div className="flex-between mb-4">
@@ -144,7 +183,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
         <p style={{ fontSize: '1.2rem', lineHeight: '1.6', marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
           {data.signal.signal_summary}
         </p>
-        
         <div className="flex-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
           <div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Target Sector</div>
@@ -173,7 +211,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
             ))}
           </div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {data.stock_analyses.map((stock, idx) => {
             const returnVal = getReturnForTimeframe(stock.returns, selectedTimeframe);
@@ -236,7 +273,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
                 {stock.returns.company_name}
               </div>
             </div>
-
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
               <div className="flex-between mb-2">
                 <span style={{ color: 'var(--text-secondary)' }}>Last Close</span>
@@ -259,7 +295,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
                 <strong><FormatPct value={stock.returns.year_return_pct} /></strong>
               </div>
             </div>
-
             <div>
               <div className="flex-between mb-2">
                 <span style={{ fontSize: '0.9rem' }}>Average Sentiment</span>
@@ -275,9 +310,35 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
         ))}
       </div>
 
-      {/* 5. Final Summary */}
+      {/* 5. Final Summary with TTS */}
       <div className="glass-card mb-8" style={{ border: '1px solid var(--accent)' }}>
-        <h3 className="mb-4 text-accent">AI Summary & Recommendation</h3>
+        <div className="flex-between mb-4">
+          <h3 className="text-accent">AI Summary & Recommendation</h3>
+          <button
+            className={`tts-btn ${ttsState === 'playing' ? 'playing' : ''} ${ttsState === 'loading' ? 'loading' : ''}`}
+            onClick={handleListenToSummary}
+            disabled={ttsState === 'loading'}
+          >
+            {ttsState === 'loading' && (
+              <><div className="tts-spinner" /> Generating...</>
+            )}
+            {ttsState === 'playing' && (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                Stop
+              </>
+            )}
+            {ttsState === 'idle' && (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+                Listen
+              </>
+            )}
+          </button>
+        </div>
         <p style={{ lineHeight: '1.8', whiteSpace: 'pre-wrap', color: '#e4e4e7' }}>
           {data.summary_recommendation}
         </p>

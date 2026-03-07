@@ -3,8 +3,11 @@ import json
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from pydantic import BaseModel
 from app.models import AnalysisResponse
 from app.pipeline import run_pipeline
+from app.services.elevenlabs import text_to_speech
 
 app = FastAPI(
     title="Text-to-Investment Signal Pipeline",
@@ -15,16 +18,44 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+
+# --- Request models ---
+class AnalyzeTextRequest(BaseModel):
+    text: str
+
+class TTSRequest(BaseModel):
+    text: str
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+async def _run_pipeline_safe(raw_text: str) -> AnalysisResponse:
+    """Shared pipeline runner with error handling."""
+    try:
+        return await run_pipeline(raw_text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to parse AI response as JSON: {str(e)}"
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "API key" in error_msg or "api_key" in error_msg or "401" in error_msg or "403" in error_msg:
+            raise HTTPException(
+                status_code=401,
+                detail=f"API key error — please check your .env file has valid keys. Details: {error_msg}"
+            )
+        print(f"Pipeline error: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {error_msg}")
 
 
 @app.post("/analyze", response_model=AnalysisResponse)
@@ -39,24 +70,35 @@ async def analyze(file: UploadFile = File(...)):
     if not raw_text:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    return await _run_pipeline_safe(raw_text)
+
+
+@app.post("/analyze-text", response_model=AnalysisResponse)
+async def analyze_text(request: AnalyzeTextRequest):
+    """Accept raw text and return a full investment signal analysis."""
+    raw_text = request.text.strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="Text input is empty.")
+
+    return await _run_pipeline_safe(raw_text)
+
+
+@app.post("/tts")
+async def tts(request: TTSRequest):
+    """Convert text to speech using ElevenLabs. Returns MP3 audio."""
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text is empty.")
+
     try:
-        result = await run_pipeline(raw_text)
-        return result
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to parse AI response as JSON: {str(e)}"
-        )
+        audio_bytes = await text_to_speech(request.text)
+        return Response(content=audio_bytes, media_type="audio/mpeg")
     except Exception as e:
         error_msg = str(e)
-        # Provide a more helpful message for common API key issues
-        if "API key" in error_msg or "api_key" in error_msg or "401" in error_msg or "403" in error_msg:
+        if "401" in error_msg or "invalid" in error_msg.lower():
             raise HTTPException(
                 status_code=401,
-                detail=f"API key error — please check your .env file has valid keys. Details: {error_msg}"
+                detail="ElevenLabs API key error — check ELEVENLABS_API_KEY in .env"
             )
-        print(f"Pipeline error: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Pipeline failed: {error_msg}"
-        )
+        print(f"TTS error: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {error_msg}")
+

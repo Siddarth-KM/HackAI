@@ -1,62 +1,77 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
+import useSpeechRecognition from '../hooks/useSpeechRecognition';
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResponsePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { transcript, isListening, isSupported, startListening, stopListening } = useSpeechRecognition();
+
+  // Append live transcript to text area
+  useEffect(() => {
+    if (transcript) {
+      setText(prev => {
+        // If already recording, replace last transcript chunk with new one
+        const base = prev.endsWith('\n') || prev === '' ? prev : prev + ' ';
+        return base + transcript;
+      });
     }
+  }, [transcript]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setText(content);
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be loaded again
+    e.target.value = '';
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFile(e.dataTransfer.files[0]);
+  const handleRecord = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
     }
   };
 
   const handleAnalyze = async () => {
-    if (!file) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
     setLoading(true);
     setError(null);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/analyze`, {
+      const response = await fetch(`${apiUrl}/analyze-text`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
       });
 
       if (!response.ok) {
-        // Try to parse the JSON error body from FastAPI
         let errorMessage = `Server returned ${response.status}`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorMessage;
         } catch {
-          // Response wasn't JSON, try reading as text
           try {
             const errorText = await response.text();
             if (errorText) errorMessage = errorText;
-          } catch {
-            // ignore
-          }
+          } catch {}
         }
         throw new Error(errorMessage);
       }
@@ -78,54 +93,74 @@ export default function Home() {
     <main className="container">
       <h1 className="title mt-8">HackAI Market Intelligence</h1>
       <p className="subtitle">
-        Upload market news, reports, or text signals. Our AI pipeline will extract signals, identify affected S&P 500 stocks, and compute their financial metrics & sentiment.
+        Type, paste, upload, or speak your market intelligence. Our AI pipeline extracts signals, identifies affected S&P 500 stocks, and computes financial metrics & sentiment.
       </p>
 
       {!result && (
         <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div 
-            className={`upload-area ${dragOver ? 'dragover' : ''} mb-6`}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange}
-              accept=".txt" 
-            />
-            {file ? (
-              <div>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '1rem' }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
+          {/* Input mode buttons */}
+          <div className="input-modes mb-4">
+            <button
+              className="input-mode-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload a .txt file"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload .txt
+            </button>
+
+            {isSupported && (
+              <button
+                className={`input-mode-btn ${isListening ? 'recording' : ''}`}
+                onClick={handleRecord}
+                title={isListening ? 'Stop recording' : 'Start recording'}
+              >
+                {isListening && <span className="recording-dot" />}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
-                <div style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--accent)' }}>{file.name}</div>
-                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Ready to analyze</div>
-              </div>
-            ) : (
-              <div>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '1rem' }}>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <div style={{ fontSize: '1.2rem', fontWeight: 500, marginBottom: '0.5rem' }}>Click to upload or drag & drop</div>
-                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>TXT files only (max 10MB)</div>
-              </div>
+                {isListening ? 'Stop' : 'Record'}
+              </button>
             )}
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".txt"
+              style={{ display: 'none' }}
+            />
           </div>
 
+          {/* Textarea */}
+          <textarea
+            className="input-textarea mb-4"
+            placeholder="Type or paste your market intelligence, news, report, or signal here..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+          />
+
+          {isListening && (
+            <div className="recording-banner mb-4">
+              <span className="recording-dot" />
+              Listening... Speak into your microphone
+            </div>
+          )}
+
+          {/* Analyze button */}
           <div style={{ textAlign: 'center' }}>
-            <button 
-              className="btn" 
-              onClick={(e) => { e.stopPropagation(); handleAnalyze(); }}
-              disabled={!file || loading}
+            <button
+              className="btn"
+              onClick={handleAnalyze}
+              disabled={!text.trim() || loading}
               style={{ width: '100%', maxWidth: '300px' }}
             >
               {loading ? 'Processing Pipeline...' : 'Run Analysis Pipeline'}
@@ -134,8 +169,8 @@ export default function Home() {
 
           {loading && (
             <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <div className="loader"></div>
-              <p style={{ color: 'var(--text-secondary)' }}>Running Massive API & Alpha Vantage Data Fetching...</p>
+              <div className="loader" />
+              <p style={{ color: 'var(--text-secondary)' }}>Running AI pipeline — this may take a minute...</p>
             </div>
           )}
 
@@ -151,13 +186,12 @@ export default function Home() {
         <>
           <AnalysisResult data={result} />
           <div style={{ textAlign: 'center', marginTop: '3rem', marginBottom: '3rem' }}>
-            <button className="btn" onClick={() => { setResult(null); setFile(null); }}>
+            <button className="btn" onClick={() => { setResult(null); setText(''); }}>
               Analyze Another Document
             </button>
           </div>
         </>
       )}
-
     </main>
   );
 }
