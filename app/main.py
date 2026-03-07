@@ -115,10 +115,12 @@ async def stt(file: UploadFile = File(...)):
         return {"text": transcript}
     except Exception as e:
         error_msg = str(e)
-        if "401" in error_msg or "invalid" in error_msg.lower():
+        print(f"STT error: {error_msg}")
+        # Check for actual 401 (unauthorized) from ElevenLabs
+        if "returned 401" in error_msg:
             raise HTTPException(
                 status_code=401,
                 detail="ElevenLabs API key error — check ELEVENLABS_API_KEY in .env"
             )
-        print(f"STT error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"STT failed: {error_msg}")
+

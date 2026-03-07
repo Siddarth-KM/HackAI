@@ -52,7 +52,10 @@ async def speech_to_text(audio_bytes: bytes, filename: str = "recording.webm") -
             files={"file": (filename, audio_bytes, mime)},
             timeout=60,
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            body = response.text
+            print(f"ElevenLabs STT error {response.status_code}: {body}")
+            raise Exception(f"ElevenLabs STT returned {response.status_code}: {body}")
         result = response.json()
         return result.get("text", "")
 

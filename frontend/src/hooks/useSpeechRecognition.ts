@@ -80,14 +80,18 @@ export default function useAudioRecorder(): UseAudioRecorderReturn {
 
           if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.detail || `STT failed: ${response.status}`);
+            const msg = errData.detail || `STT failed with status ${response.status}`;
+            setError(msg);
+            console.warn('STT error response:', msg);
+            resolve('');
+            return;
           }
 
           const data = await response.json();
           resolve(data.text || '');
         } catch (err: any) {
-          setError(err.message || 'Transcription failed');
-          console.error('STT error:', err);
+          setError(err.message || 'Transcription failed — check your connection and ElevenLabs API key');
+          console.warn('STT fetch error:', err);
           resolve('');
         } finally {
           setIsTranscribing(false);
