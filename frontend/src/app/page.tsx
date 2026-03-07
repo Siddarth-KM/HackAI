@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
-import useSpeechRecognition from '../hooks/useSpeechRecognition';
+import useAudioRecorder from '../hooks/useSpeechRecognition';
 
 export default function Home() {
   const [text, setText] = useState('');
@@ -11,18 +11,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { transcript, isListening, isSupported, startListening, stopListening } = useSpeechRecognition();
-
-  // Append live transcript to text area
-  useEffect(() => {
-    if (transcript) {
-      setText(prev => {
-        // If already recording, replace last transcript chunk with new one
-        const base = prev.endsWith('\n') || prev === '' ? prev : prev + ' ';
-        return base + transcript;
-      });
-    }
-  }, [transcript]);
+  const { isRecording, isTranscribing, startRecording, stopRecording, error: recError } = useAudioRecorder();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,15 +23,17 @@ export default function Home() {
       setText(content);
     };
     reader.readAsText(file);
-    // Reset input so the same file can be loaded again
     e.target.value = '';
   };
 
-  const handleRecord = () => {
-    if (isListening) {
-      stopListening();
+  const handleRecord = async () => {
+    if (isRecording) {
+      const transcript = await stopRecording();
+      if (transcript) {
+        setText(prev => prev ? prev + '\n' + transcript : transcript);
+      }
     } else {
-      startListening();
+      startRecording();
     }
   };
 
@@ -113,22 +104,27 @@ export default function Home() {
               Upload .txt
             </button>
 
-            {isSupported && (
-              <button
-                className={`input-mode-btn ${isListening ? 'recording' : ''}`}
-                onClick={handleRecord}
-                title={isListening ? 'Stop recording' : 'Start recording'}
-              >
-                {isListening && <span className="recording-dot" />}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
-                {isListening ? 'Stop' : 'Record'}
-              </button>
-            )}
+            <button
+              className={`input-mode-btn ${isRecording ? 'recording' : ''}`}
+              onClick={handleRecord}
+              disabled={isTranscribing}
+              title={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              {isRecording && <span className="recording-dot" />}
+              {isTranscribing ? (
+                <><div className="tts-spinner" style={{ width: '14px', height: '14px' }} /> Transcribing...</>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                  {isRecording ? 'Stop' : 'Record'}
+                </>
+              )}
+            </button>
 
             <input
               type="file"
@@ -148,10 +144,22 @@ export default function Home() {
             rows={8}
           />
 
-          {isListening && (
+          {isRecording && (
             <div className="recording-banner mb-4">
               <span className="recording-dot" />
-              Listening... Speak into your microphone
+              Recording... Click &quot;Stop&quot; when done speaking
+            </div>
+          )}
+
+          {isTranscribing && (
+            <div className="recording-banner mb-4" style={{ borderColor: 'rgba(59, 130, 246, 0.3)', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent)' }}>
+              <div className="tts-spinner" /> Transcribing with ElevenLabs Scribe...
+            </div>
+          )}
+
+          {(recError || error) && (
+            <div className="mt-2 mb-4" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '0.75rem 1rem', borderRadius: '8px', color: '#ff8a8a', fontSize: '0.9rem' }}>
+              {recError || error}
             </div>
           )}
 
@@ -171,12 +179,6 @@ export default function Home() {
             <div style={{ textAlign: 'center', marginTop: '2rem' }}>
               <div className="loader" />
               <p style={{ color: 'var(--text-secondary)' }}>Running AI pipeline — this may take a minute...</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-6" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: '8px', color: '#ff8a8a', textAlign: 'center' }}>
-              {error}
             </div>
           )}
         </div>

@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from app.models import AnalysisResponse
 from app.pipeline import run_pipeline
-from app.services.elevenlabs import text_to_speech
+from app.services.elevenlabs import text_to_speech, speech_to_text
 
 app = FastAPI(
     title="Text-to-Investment Signal Pipeline",
@@ -102,3 +102,23 @@ async def tts(request: TTSRequest):
         print(f"TTS error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"TTS failed: {error_msg}")
 
+
+@app.post("/stt")
+async def stt(file: UploadFile = File(...)):
+    """Convert speech audio to text using ElevenLabs Scribe v2."""
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Audio file is empty.")
+
+    try:
+        transcript = await speech_to_text(audio_bytes, filename=file.filename or "recording.webm")
+        return {"text": transcript}
+    except Exception as e:
+        error_msg = str(e)
+        if "401" in error_msg or "invalid" in error_msg.lower():
+            raise HTTPException(
+                status_code=401,
+                detail="ElevenLabs API key error — check ELEVENLABS_API_KEY in .env"
+            )
+        print(f"STT error: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"STT failed: {error_msg}")
