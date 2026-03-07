@@ -20,7 +20,7 @@ export default function Home() {
     isSupported,
     startListening,
     stopListening
-  } = useSpeechRecognition();
+  } = useAudioRecorder();
 
   /* Append speech transcript */
   useEffect(() => {
@@ -164,7 +164,16 @@ export default function Home() {
           />
 
         </div>
-
+        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+  {isSupported && (
+    <button
+      className={`voice-btn ${isListening ? "recording" : ""}`}
+      onClick={handleRecord}
+    >
+      {isListening ? "🎤 Stop Recording" : "🎤 Start Voice Input"}
+    </button>
+  )}
+</div>
         {/* FEATURE CARDS */}
 
         <div className="grid-2 mb-8">
