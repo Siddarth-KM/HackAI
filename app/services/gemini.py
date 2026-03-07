@@ -41,7 +41,7 @@ Raw text:
 {raw_text}"""
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         contents=prompt,
     )
 
@@ -79,7 +79,7 @@ Return ONLY a JSON array of exactly 5 ticker symbols, e.g. ["AAPL", "MSFT", "GOO
 No explanation, no markdown, no code blocks. Just the JSON array."""
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         contents=prompt,
     )
 
@@ -121,7 +121,7 @@ Stock Analysis Data:
 Write ONLY the recommendation paragraph. No headers, no bullet points, no markdown."""
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         contents=prompt,
     )
 
