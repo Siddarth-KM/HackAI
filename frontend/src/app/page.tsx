@@ -1,43 +1,62 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Grainient from './Granient';
 import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
 import useAudioRecorder from '../hooks/useSpeechRecognition';
 
 export default function Home() {
+
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResponsePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isRecording, isTranscribing, startRecording, stopRecording, error: recError } = useAudioRecorder();
 
+  const {
+    transcript,
+    isListening,
+    isSupported,
+    startListening,
+    stopListening
+  } = useAudioRecorder();
+
+  /* Append speech transcript */
+  useEffect(() => {
+    if (transcript) {
+      setText(prev => {
+        const base = prev.endsWith('\n') || prev === '' ? prev : prev + ' ';
+        return base + transcript;
+      });
+    }
+  }, [transcript]);
+
+  /* File upload */
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
+
     reader.onload = (event) => {
       const content = event.target?.result as string;
       setText(content);
     };
+
     reader.readAsText(file);
     e.target.value = '';
   };
 
-  const handleRecord = async () => {
-    if (isRecording) {
-      const transcript = await stopRecording();
-      if (transcript) {
-        setText(prev => prev ? prev + '\n' + transcript : transcript);
-      }
-    } else {
-      startRecording();
-    }
+  const handleRecord = () => {
+    if (isListening) stopListening();
+    else startListening();
   };
 
+  /* Run AI analysis */
   const handleAnalyze = async () => {
+
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -46,154 +65,243 @@ export default function Home() {
     setResult(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
       const response = await fetch(`${apiUrl}/analyze-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed }),
+        body: JSON.stringify({ text: trimmed })
       });
 
-      if (!response.ok) {
-        let errorMessage = `Server returned ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorMessage;
-        } catch {
-          try {
-            const errorText = await response.text();
-            if (errorText) errorMessage = errorText;
-          } catch {}
-        }
-        throw new Error(errorMessage);
-      }
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
       const data: AnalysisResponsePayload = await response.json();
+
       setResult(data);
+
     } catch (err: any) {
-      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-        setError('Cannot connect to backend server. Make sure the FastAPI server is running on http://localhost:8000');
-      } else {
-        setError(err.message || 'An unexpected error occurred.');
-      }
+
+      setError(err.message || 'Unexpected error');
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
   return (
-    <main className="container">
-      <h1 className="title mt-8">HackAI Market Intelligence</h1>
-      <p className="subtitle">
-        Type, paste, upload, or speak your market intelligence. Our AI pipeline extracts signals, identifies affected S&P 500 stocks, and computes financial metrics & sentiment.
-      </p>
 
-      {!result && (
-        <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          {/* Input mode buttons */}
-          <div className="input-modes mb-4">
-            <button
-              className="input-mode-btn"
-              onClick={() => fileInputRef.current?.click()}
-              title="Upload a .txt file"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              Upload .txt
-            </button>
+    <div style={{ position: "relative", minHeight: "100vh", overflow: "hidden" }}>
 
-            <button
-              className={`input-mode-btn ${isRecording ? 'recording' : ''}`}
-              onClick={handleRecord}
-              disabled={isTranscribing}
-              title={isRecording ? 'Stop recording' : 'Start recording'}
-            >
-              {isRecording && <span className="recording-dot" />}
-              {isTranscribing ? (
-                <><div className="tts-spinner" style={{ width: '14px', height: '14px' }} /> Transcribing...</>
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                    <line x1="8" y1="23" x2="16" y2="23" />
-                  </svg>
-                  {isRecording ? 'Stop' : 'Record'}
-                </>
-              )}
-            </button>
+      {/* BACKGROUND */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: -1
+        }}
+      >
+        <Grainient
+          color1="#0c5e0b"
+          color2="#46bd3d"
+          color3="#3e8603"
+          timeSpeed={0.25}
+          colorBalance={0}
+          warpStrength={1}
+          warpFrequency={5}
+          warpSpeed={2}
+          warpAmplitude={50}
+          blendAngle={0}
+          blendSoftness={0.05}
+          rotationAmount={500}
+          noiseScale={2}
+          grainAmount={0.1}
+          grainScale={2}
+          grainAnimated={false}
+          contrast={1.5}
+          gamma={1}
+          saturation={1}
+          centerX={0}
+          centerY={0}
+          zoom={0.9}
+        />
+      </div>
 
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".txt"
-              style={{ display: 'none' }}
-            />
-          </div>
+      <main className="container">
 
-          {/* Textarea */}
-          <textarea
-            className="input-textarea mb-4"
-            placeholder="Type or paste your market intelligence, news, report, or signal here..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
+        {/* HERO */}
+
+        <h1 className="title mt-8">
+          Interactive Analytics <br /> Made Simple
+        </h1>
+
+        <p className="subtitle">
+          Monitor business performance with cross-filtering dashboards.
+          Get real-time insights across sales, revenue, and regional metrics.
+        </p>
+
+        {/* Upload Button */}
+
+        <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+
+          <button
+            className="btn"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".txt"
+            onChange={handleFileUpload}
+            style={{ display: "none" }}
           />
 
-          {isRecording && (
-            <div className="recording-banner mb-4">
-              <span className="recording-dot" />
-              Recording... Click &quot;Stop&quot; when done speaking
-            </div>
+        </div>
+        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+  {isSupported && (
+    <button
+      className={`voice-btn ${isListening ? "recording" : ""}`}
+      onClick={handleRecord}
+    >
+      {isListening ? "🎤 Stop Recording" : "🎤 Start Voice Input"}
+    </button>
+  )}
+</div>
+        {/* FEATURE CARDS */}
+
+        <div className="grid-2 mb-8">
+
+          <div className="glass-card">
+
+            <h3>Cross-Filtering</h3>
+
+            <p className="mt-2">
+              Interactive charts that update dynamically when you select
+              data points across visualizations.
+            </p>
+
+          </div>
+
+          <div className="glass-card">
+
+            <h3>Real-Time Metrics</h3>
+
+            <p className="mt-2">
+              Track revenue, sales, customers, and units sold with
+              year-over-year growth comparisons.
+            </p>
+
+          </div>
+
+          <div className="glass-card">
+
+            <h3>Fast & Responsive</h3>
+
+            <p className="mt-2">
+              Optimized for desktop viewing with smooth interactions
+              and accessible design.
+            </p>
+
+          </div>
+
+        </div>
+
+        {/* TEXT INPUT */}
+
+        <div className="glass-card" style={{ maxWidth: "900px", margin: "0 auto" }}>
+
+          <textarea
+            className="input-textarea mb-4"
+            placeholder="Paste or type your market intelligence here..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+
+          {isSupported && (
+
+            <button
+              className={`input-mode-btn ${isListening ? "recording" : ""}`}
+              onClick={handleRecord}
+            >
+              {isListening ? "Stop Recording" : "Record Voice"}
+            </button>
+
           )}
 
-          {isTranscribing && (
-            <div className="recording-banner mb-4" style={{ borderColor: 'rgba(59, 130, 246, 0.3)', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent)' }}>
-              <div className="tts-spinner" /> Transcribing with ElevenLabs Scribe...
-            </div>
-          )}
+          <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
 
-          {(recError || error) && (
-            <div className="mt-2 mb-4" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '0.75rem 1rem', borderRadius: '8px', color: '#ff8a8a', fontSize: '0.9rem' }}>
-              {recError || error}
-            </div>
-          )}
-
-          {/* Analyze button */}
-          <div style={{ textAlign: 'center' }}>
             <button
               className="btn"
-              onClick={handleAnalyze}
               disabled={!text.trim() || loading}
-              style={{ width: '100%', maxWidth: '300px' }}
+              onClick={handleAnalyze}
             >
-              {loading ? 'Processing Pipeline...' : 'Run Analysis Pipeline'}
+              {loading ? "Processing..." : "Run Analysis Pipeline"}
             </button>
+
           </div>
 
           {loading && (
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <div className="loader" />
-              <p style={{ color: 'var(--text-secondary)' }}>Running AI pipeline — this may take a minute...</p>
-            </div>
-          )}
-        </div>
-      )}
 
-      {result && !loading && (
-        <>
-          <AnalysisResult data={result} />
-          <div style={{ textAlign: 'center', marginTop: '3rem', marginBottom: '3rem' }}>
-            <button className="btn" onClick={() => { setResult(null); setText(''); }}>
-              Analyze Another Document
-            </button>
-          </div>
-        </>
-      )}
-    </main>
+            <div style={{ textAlign: "center", marginTop: "2rem" }}>
+              <div className="loader" />
+              <p>Running AI pipeline...</p>
+            </div>
+
+          )}
+
+          {error && (
+
+            <div
+              className="mt-4"
+              style={{
+                background: "rgba(239,68,68,0.1)",
+                padding: "1rem",
+                borderRadius: "8px",
+                color: "#ff8a8a",
+                textAlign: "center"
+              }}
+            >
+              {error}
+            </div>
+
+          )}
+
+        </div>
+
+        {/* RESULT */}
+
+        {result && !loading && (
+
+          <>
+            <AnalysisResult data={result} />
+
+            <div style={{ textAlign: "center", marginTop: "3rem" }}>
+
+              <button
+                className="btn"
+                onClick={() => {
+                  setResult(null);
+                  setText('');
+                }}
+              >
+                Analyze Another
+              </button>
+
+            </div>
+          </>
+
+        )}
+
+      </main>
+
+    </div>
+
   );
 }
