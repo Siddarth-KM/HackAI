@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Grainient from './Granient';
 import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
-import useSpeechRecognition from '../hooks/useSpeechRecognition';
+import useAudioRecorder from '../hooks/useSpeechRecognition';
 
 export default function Home() {
 

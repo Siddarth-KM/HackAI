@@ -1,116 +1,112 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
-interface UseSpeechRecognitionReturn {
-  transcript: string;
-  isListening: boolean;
-  isSupported: boolean;
-  startListening: () => void;
-  stopListening: () => void;
-  resetTranscript: () => void;
+interface UseAudioRecorderReturn {
+  isRecording: boolean;
+  isTranscribing: boolean;
+  startRecording: () => void;
+  stopRecording: () => Promise<string>;
+  error: string | null;
 }
 
-export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
-  const [transcript, setTranscript] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
-  const recognitionRef = useRef<any>(null);
+export default function useAudioRecorder(): UseAudioRecorderReturn {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  useEffect(() => {
-    // Check browser support
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    setIsSupported(!!SpeechRecognition);
+  const startRecording = useCallback(async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+      });
 
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      chunksRef.current = [];
 
-      recognition.onresult = (event: any) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript + ' ';
-          } else {
-            interimTranscript += result[0].transcript;
-          }
-        }
-
-        setTranscript(finalTranscript + interimTranscript);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error !== 'no-speech') {
-          setIsListening(false);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
         }
       };
 
-      recognition.onend = () => {
-        // If still supposed to be listening, restart (browser may stop auto)
-        if (recognitionRef.current?._shouldListen) {
-          try {
-            recognition.start();
-          } catch {
-            setIsListening(false);
-          }
-        } else {
-          setIsListening(false);
-        }
-      };
-
-      recognitionRef.current = recognition;
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(250); // Collect chunks every 250ms
+      setIsRecording(true);
+    } catch (err: any) {
+      setError('Microphone access denied. Please allow mic access and try again.');
+      console.error('MediaRecorder error:', err);
     }
+  }, []);
 
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current._shouldListen = false;
+  const stopRecording = useCallback(async (): Promise<string> => {
+    return new Promise((resolve) => {
+      const mediaRecorder = mediaRecorderRef.current;
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        resolve('');
+        return;
+      }
+
+      mediaRecorder.onstop = async () => {
+        setIsRecording(false);
+
+        // Stop all tracks to release the mic
+        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        chunksRef.current = [];
+
+        if (audioBlob.size === 0) {
+          resolve('');
+          return;
+        }
+
+        // Send to backend /stt endpoint
+        setIsTranscribing(true);
         try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
-    };
-  }, []);
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'recording.webm');
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
-      setTranscript('');
-      recognitionRef.current._shouldListen = true;
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (e) {
-        console.error('Failed to start speech recognition:', e);
-      }
-    }
-  }, [isListening]);
+          const response = await fetch(`${apiUrl}/stt`, {
+            method: 'POST',
+            body: formData,
+          });
 
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current._shouldListen = false;
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      setIsListening(false);
-    }
-  }, []);
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const msg = errData.detail || `STT failed with status ${response.status}`;
+            setError(msg);
+            console.warn('STT error response:', msg);
+            resolve('');
+            return;
+          }
 
-  const resetTranscript = useCallback(() => {
-    setTranscript('');
+          const data = await response.json();
+          resolve(data.text || '');
+        } catch (err: any) {
+          setError(err.message || 'Transcription failed — check your connection and ElevenLabs API key');
+          console.warn('STT fetch error:', err);
+          resolve('');
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.stop();
+    });
   }, []);
 
   return {
-    transcript,
-    isListening,
-    isSupported,
-    startListening,
-    stopListening,
-    resetTranscript,
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
+    error,
   };
 }
