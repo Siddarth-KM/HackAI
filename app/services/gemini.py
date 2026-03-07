@@ -1,6 +1,9 @@
 import json
+import asyncio
 from google import genai
 from app.config import settings
+
+MODEL_NAME = "gemini-2.5-flash"
 
 GICS_SECTORS = [
     "Information Technology",
@@ -19,6 +22,26 @@ GICS_SECTORS = [
 
 def _get_client() -> genai.Client:
     return genai.Client(api_key=settings.gemini_api_key)
+
+
+def _call_gemini(client: genai.Client, prompt: str, max_retries: int = 3) -> str:
+    """Call Gemini with automatic retry on rate limit (429) errors."""
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+            )
+            return response.text.strip()
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                wait_time = (attempt + 1) * 15  # 15s, 30s, 45s
+                print(f"Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                import time
+                time.sleep(wait_time)
+            else:
+                raise
+    raise Exception(f"Gemini API rate limit exceeded after {max_retries} retries")
 
 
 async def extract_signal(raw_text: str) -> dict:
@@ -40,12 +63,7 @@ Return ONLY valid JSON, no markdown formatting, no code blocks, no explanation.
 Raw text:
 {raw_text}"""
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-
-    text = response.text.strip()
+    text = _call_gemini(client, prompt)
     # Strip markdown code fences if present
     if text.startswith("```"):
         text = text.split("\n", 1)[1]
@@ -78,12 +96,7 @@ Available stocks:
 Return ONLY a JSON array of exactly 5 ticker symbols, e.g. ["AAPL", "MSFT", "GOOGL", "AMZN", "META"].
 No explanation, no markdown, no code blocks. Just the JSON array."""
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-
-    text = response.text.strip()
+    text = _call_gemini(client, prompt)
     if text.startswith("```"):
         text = text.split("\n", 1)[1]
         text = text.rsplit("```", 1)[0]
@@ -120,9 +133,4 @@ Stock Analysis Data:
 
 Write ONLY the recommendation paragraph. No headers, no bullet points, no markdown."""
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-
-    return response.text.strip()
+    return _call_gemini(client, prompt)

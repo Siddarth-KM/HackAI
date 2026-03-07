@@ -1,3 +1,5 @@
+import asyncio
+
 from app.models import (
     AnalysisResponse,
     ArticleSentiment,
@@ -30,7 +32,11 @@ async def run_pipeline(raw_text: str) -> AnalysisResponse:
 
     # Step 3 & 4: For each stock, get price returns and sentiment
     stock_analyses: list[StockAnalysis] = []
-    for ticker in selected_tickers:
+    for i, ticker in enumerate(selected_tickers):
+        # Throttle between stocks to avoid API rate limits
+        if i > 0:
+            await asyncio.sleep(13)  # Alpha Vantage free tier: 5 calls/min
+
         returns_data = await get_stock_returns(ticker)
         sentiment_data = await get_stock_sentiment(ticker)
 

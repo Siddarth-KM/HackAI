@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+import time
 from massive import RESTClient
 from app.config import settings
 
@@ -14,15 +15,38 @@ async def get_stock_returns(ticker: str) -> dict:
     today = date.today()
     one_year_ago = today - timedelta(days=365)
 
-    aggs = client.get_aggs(
-        ticker=ticker,
-        multiplier=1,
-        timespan="day",
-        from_=one_year_ago.isoformat(),
-        to=today.isoformat(),
-        adjusted=True,
-        sort="asc",
-    )
+    # Retry with backoff on 429 rate limit errors
+    aggs = None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            aggs = client.get_aggs(
+                ticker=ticker,
+                multiplier=1,
+                timespan="day",
+                from_=one_year_ago.isoformat(),
+                to=today.isoformat(),
+                adjusted=True,
+                sort="asc",
+            )
+            break
+        except Exception as e:
+            if "429" in str(e) or "too many" in str(e).lower() or "rate" in str(e).lower():
+                wait_time = (attempt + 1) * 15
+                print(f"Massive API rate limited for {ticker}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                raise
+    else:
+        print(f"Massive API: max retries exceeded for {ticker}, returning empty data")
+        return {
+            "ticker": ticker,
+            "last_close": None,
+            "week_return_pct": None,
+            "month_return_pct": None,
+            "three_month_return_pct": None,
+            "year_return_pct": None,
+        }
 
     if not aggs:
         return {
