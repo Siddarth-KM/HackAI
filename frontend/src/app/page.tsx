@@ -140,8 +140,8 @@ export default function Home() {
         </h1>
 
         <p className="subtitle">
-          Monitor business performance with cross-filtering dashboards.
-          Get real-time insights across sales, revenue, and regional metrics.
+          Upload market news, earnings calls, or incident reports.
+          Our AI pipeline extracts signals, selects stocks, and delivers actionable recommendations.
         </p>
 
         {/* Upload Button */}
@@ -180,33 +180,44 @@ export default function Home() {
 
           <div className="glass-card">
 
-            <h3>Cross-Filtering</h3>
+            <h3>Signal Extraction</h3>
 
             <p className="mt-2">
-              Interactive charts that update dynamically when you select
-              data points across visualizations.
+              AI-powered analysis detects investment signals from raw text
+              — earnings calls, incident reports, or market news.
             </p>
 
           </div>
 
           <div className="glass-card">
 
-            <h3>Real-Time Metrics</h3>
+            <h3>Stock Selection</h3>
 
             <p className="mt-2">
-              Track revenue, sales, customers, and units sold with
-              year-over-year growth comparisons.
+              Automatically identifies the top S&amp;P 500 stocks most
+              impacted by the detected signal and sector.
             </p>
 
           </div>
 
           <div className="glass-card">
 
-            <h3>Fast & Responsive</h3>
+            <h3>Sentiment &amp; Returns</h3>
 
             <p className="mt-2">
-              Optimized for desktop viewing with smooth interactions
-              and accessible design.
+              Fetches real-time price returns and news sentiment scores
+              to quantify each stock&apos;s outlook.
+            </p>
+
+          </div>
+
+          <div className="glass-card">
+
+            <h3>AI Recommendation</h3>
+
+            <p className="mt-2">
+              Generates an actionable long/short recommendation with
+              timeframe, sector context, and supporting data.
             </p>
 
           </div>
