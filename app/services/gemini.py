@@ -34,14 +34,22 @@ def _call_gemini(client: genai.Client, prompt: str, max_retries: int = 3) -> str
             )
             return response.text.strip()
         except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                wait_time = (attempt + 1) * 15  # 15s, 30s, 45s
-                print(f"Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
-                import time
-                time.sleep(wait_time)
+            error_msg = str(e)
+            # Check for authentication errors
+            if "401" in error_msg or "invalid" in error_msg.lower() and "key" in error_msg.lower():
+                raise Exception(f"Gemini API authentication failed. Check your GEMINI_API_KEY in .env file. Error: {error_msg}")
+            # Check for quota/rate limit errors
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 15  # 15s, 30s, 45s
+                    print(f"Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    import time
+                    time.sleep(wait_time)
+                else:
+                    raise Exception(f"Gemini API rate limit exceeded after {max_retries} retries: {error_msg}")
             else:
-                raise
-    raise Exception(f"Gemini API rate limit exceeded after {max_retries} retries")
+                # For other errors, don't retry
+                raise Exception(f"Gemini API error: {error_msg}")
 
 
 async def extract_signal(raw_text: str) -> dict:
