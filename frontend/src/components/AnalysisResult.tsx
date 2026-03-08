@@ -97,7 +97,7 @@ function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: 
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', height: '28px' }}>
-      <div style={{ flex: 1, height: '100%', background: 'rgba(255,255,255,0.03)', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: '100%', background: 'rgba(0,0,0,0.35)', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
         <div
           style={{
             position: 'absolute',
@@ -126,6 +126,16 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
   const [showCharts, setShowCharts] = React.useState(false);
   const [ttsState, setTtsState] = React.useState<'idle' | 'loading' | 'playing'>('idle');
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  // Cleanup TTS audio on unmount
+  React.useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   const returnValues = data.stock_analyses.map(s => getReturnForTimeframe(s.returns, selectedTimeframe)).filter(v => v !== null) as number[];
   const maxAbsValue = returnValues.length > 0 ? Math.max(...returnValues.map(Math.abs), 1) : 1;
@@ -298,8 +308,8 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
             <div>
               <div className="flex-between mb-2">
                 <span style={{ fontSize: '0.9rem' }}>Average Sentiment</span>
-                <span className={`badge ${(stock.sentiment.average_sentiment || 0) > 0 ? 'long' : 'short'}`}>
-                  {stock.sentiment.average_sentiment?.toFixed(2) || 'N/A'}
+                <span className={`badge ${stock.sentiment.average_sentiment != null && stock.sentiment.average_sentiment >= 0 ? 'long' : 'short'}`}>
+                  {stock.sentiment.average_sentiment != null ? stock.sentiment.average_sentiment.toFixed(2) : 'N/A'}
                 </span>
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -344,12 +354,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
         </p>
       </div>
 
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}} />
     </div>
   );
 }

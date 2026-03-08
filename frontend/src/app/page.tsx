@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Grainient from './Granient';
 import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
 import useAudioRecorder from '../hooks/useSpeechRecognition';
@@ -13,6 +13,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const {
     transcript,
@@ -22,15 +23,30 @@ export default function Home() {
     stopListening
   } = useAudioRecorder();
 
-  /* Append speech transcript */
+  /* Live-update text with speech transcript */
+  const preRecordTextRef = useRef('');
+  useEffect(() => {
+    if (isListening && !preRecordTextRef.current && text) {
+      preRecordTextRef.current = text;
+    }
+    if (!isListening && preRecordTextRef.current) {
+      // Recording stopped — snapshot is stale
+    }
+  }, [isListening, text]);
+
   useEffect(() => {
     if (transcript) {
-      setText(prev => {
-        const base = prev.endsWith('\n') || prev === '' ? prev : prev + ' ';
-        return base + transcript;
-      });
+      const base = preRecordTextRef.current;
+      const sep = base.endsWith('\n') || base === '' ? '' : ' ';
+      setText(base + sep + transcript);
     }
   }, [transcript]);
+
+  // Reset snapshot when recording starts
+  const handleStartListening = useCallback(() => {
+    preRecordTextRef.current = text;
+    startListening();
+  }, [text, startListening]);
 
   /* File upload */
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,7 +67,7 @@ export default function Home() {
 
   const handleRecord = () => {
     if (isListening) stopListening();
-    else startListening();
+    else handleStartListening();
   };
 
   /* Run AI analysis */
@@ -59,6 +75,11 @@ export default function Home() {
 
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    // Abort any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setLoading(true);
     setError(null);
@@ -72,7 +93,8 @@ export default function Home() {
       const response = await fetch(`${apiUrl}/analyze-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed })
+        body: JSON.stringify({ text: trimmed }),
+        signal: controller.signal,
       });
 
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -81,9 +103,11 @@ export default function Home() {
 
       setResult(data);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
 
-      setError(err.message || 'Unexpected error');
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      const message = err instanceof Error ? err.message : 'Unexpected error';
+      setError(message);
 
     } finally {
 
@@ -95,14 +119,15 @@ export default function Home() {
 
   return (
 
-    <div style={{ position: "relative", minHeight: "100vh", overflow: "hidden" }}>
+    <div style={{ position: "relative", minHeight: "100vh" }}>
 
       {/* BACKGROUND */}
       <div
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: -1
+          zIndex: 0,
+          background: "#0c5e0b"
         }}
       >
         <Grainient
@@ -131,7 +156,7 @@ export default function Home() {
         />
       </div>
 
-      <main className="container">
+      <main className="container" style={{ position: "relative", zIndex: 1 }}>
 
         {/* HERO */}
 
@@ -158,22 +183,13 @@ export default function Home() {
           <input
             type="file"
             ref={fileInputRef}
-            accept=".txt"
+            accept=".txt,.csv,.md"
             onChange={handleFileUpload}
             style={{ display: "none" }}
           />
 
         </div>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-  {isSupported && (
-    <button
-      className={`voice-btn ${isListening ? "recording" : ""}`}
-      onClick={handleRecord}
-    >
-      {isListening ? "🎤 Stop Recording" : "🎤 Start Voice Input"}
-    </button>
-  )}
-</div>
+
         {/* FEATURE CARDS */}
 
         <div className="grid-2 mb-8">

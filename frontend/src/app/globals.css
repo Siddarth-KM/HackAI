@@ -19,13 +19,15 @@
   padding: 0;
 }
 
+html, body {
+  background: transparent;
+  min-height: 100%;
+}
+
 body {
   font-family: 'Inter', sans-serif;
-  background: transparent;
   color: var(--text-primary);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   overflow-x: hidden;
 }
 
@@ -44,36 +46,38 @@ a {
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 2rem 4rem;
   width: 100%;
 }
 
 .title {
   font-size: 3rem;
-  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 1rem;
   text-align: center;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
 }
 
 .subtitle {
   text-align: center;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 1.1rem;
   margin-bottom: 3rem;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* Glassmorphism Card */
 .glass-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+  background: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
@@ -152,10 +156,15 @@ a {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Grid layout for results */
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.5rem;
 }
 
@@ -383,4 +392,28 @@ a {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .title {
+    font-size: 2rem;
+  }
+
+  .flex-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .timeframe-toggle {
+    flex-wrap: wrap;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .glass-card {
+    padding: 1.25rem;
+  }
 }
