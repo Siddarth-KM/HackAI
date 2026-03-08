@@ -96,21 +96,32 @@ function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: 
   }
 
   const isPositive = value >= 0;
-  const widthPct = maxAbsValue > 0 ? (Math.abs(value) / maxAbsValue) * 100 : 0;
+  const barPct = maxAbsValue > 0 ? (Math.abs(value) / maxAbsValue) * 50 : 0;
 
   return (
     <div className="flex items-center gap-3 h-7">
       <div className="flex-1 h-full bg-black/40 rounded relative overflow-hidden">
-        <div
-          className="absolute top-0 h-full rounded-sm transition-all duration-500"
-          style={{
-            left: isPositive ? '50%' : `${50 - (widthPct / 2)}%`,
-            width: `${widthPct / 2}%`,
-            background: isPositive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
-            borderLeft: isPositive ? '2px solid rgb(16, 185, 129)' : 'none',
-            borderRight: !isPositive ? '2px solid rgb(239, 68, 68)' : 'none',
-          }}
-        />
+        {isPositive ? (
+          <div
+            className="absolute top-0 h-full rounded-sm transition-all duration-500"
+            style={{
+              left: '50%',
+              width: `${barPct}%`,
+              background: 'rgba(16, 185, 129, 0.3)',
+              borderRight: '2px solid rgb(16, 185, 129)',
+            }}
+          />
+        ) : (
+          <div
+            className="absolute top-0 h-full rounded-sm transition-all duration-500"
+            style={{
+              right: '50%',
+              width: `${barPct}%`,
+              background: 'rgba(239, 68, 68, 0.3)',
+              borderLeft: '2px solid rgb(239, 68, 68)',
+            }}
+          />
+        )}
         <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/15" />
       </div>
       <span className={`min-w-[72px] text-right font-semibold text-sm ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>

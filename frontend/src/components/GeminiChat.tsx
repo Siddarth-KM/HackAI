@@ -157,9 +157,12 @@ export default function GeminiChat({ context }: GeminiChatProps) {
   return (
     <div className="w-full rounded-2xl overflow-hidden" style={{ background: 'rgba(15, 15, 15, 0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)' }}>
       {/* Toggle Button */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsExpanded(!isExpanded); }}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
@@ -184,7 +187,7 @@ export default function GeminiChat({ context }: GeminiChatProps) {
             <ChevronUp className="w-5 h-5 text-gray-400" />
           </motion.div>
         </div>
-      </button>
+      </div>
 
       {/* Expandable Chat Section */}
       <AnimatePresence>
