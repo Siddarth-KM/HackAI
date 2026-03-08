@@ -65,6 +65,7 @@ Return a JSON object with exactly these fields:
 - "sector": The single most relevant GICS sector from this list: {json.dumps(GICS_SECTORS)}
 - "timeframe": The recommended investment timeframe. Must be one of: "1 month", "3 months", "6 months", "1 year"
 - "direction": Either "long" or "short" based on whether the signal is positive or negative for the sector.
+- "reliability_score": An integer from 1 to 100 rating how actionable and believable this signal is. Consider whether the claim is realistic and fact-checkable. For example, overhearing a conversation about a company's earnings beating expectations is highly plausible and actionable — that should score 85-95. But hearing "Google is going bankrupt" is obviously false and not actionable — that should score 5-15. Use your judgment on the plausibility, specificity, and source quality of the signal.
 
 Return ONLY valid JSON, no markdown formatting, no code blocks, no explanation.
 

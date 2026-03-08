@@ -9,6 +9,7 @@ interface SignalExtraction {
   sector: string;
   timeframe: string;
   direction: string;
+  reliability_score: number;
 }
 
 interface StockReturns {
@@ -199,9 +200,11 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold text-white">Investment Signal Detected</h2>
-          <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${directionColor}`}>
-            {data.signal.direction.toUpperCase()}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${directionColor}`}>
+              {data.signal.direction.toUpperCase()}
+            </span>
+          </div>
         </div>
         <p className="text-base text-white/70 leading-relaxed mb-5">
           {data.signal.signal_summary}
@@ -210,6 +213,26 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
           <div>
             <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Target Sector</div>
             <div className="text-lg font-medium text-white">{data.signal.sector}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Reliability</div>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    data.signal.reliability_score >= 70 ? 'bg-emerald-400' :
+                    data.signal.reliability_score >= 40 ? 'bg-yellow-400' : 'bg-red-400'
+                  }`}
+                  style={{ width: `${data.signal.reliability_score}%` }}
+                />
+              </div>
+              <span className={`text-lg font-bold ${
+                data.signal.reliability_score >= 70 ? 'text-emerald-400' :
+                data.signal.reliability_score >= 40 ? 'text-yellow-400' : 'text-red-400'
+              }`}>
+                {data.signal.reliability_score}
+              </span>
+            </div>
           </div>
           <div className="text-right">
             <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Timeframe</div>
