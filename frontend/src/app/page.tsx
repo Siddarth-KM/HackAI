@@ -1,307 +1,255 @@
-'use client';
+import { Link } from "react-router";
+import { BarChart3, TrendingUp, Filter, Zap, Upload, ArrowRight, Mic, Sparkles, Play, ChevronDown } from "lucide-react";
+import Iridescence from "../imports/iridescence-effect";
+import { motion } from "motion/react";
+import { useState, useRef } from "react";
 
-import React, { useState, useRef, useEffect } from 'react';
-import Grainient from './Granient';
-import AnalysisResult, { AnalysisResponsePayload } from '../components/AnalysisResult';
-import useAudioRecorder from '../hooks/useSpeechRecognition';
-
-export default function Home() {
-
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AnalysisResponsePayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
+export default function Landing() {
+  const [inputText, setInputText] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [hasData, setHasData] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const {
-    transcript,
-    isListening,
-    isSupported,
-    startListening,
-    stopListening
-  } = useAudioRecorder();
-
-  /* Append speech transcript */
-  useEffect(() => {
-    if (transcript) {
-      setText(prev => {
-        const base = prev.endsWith('\n') || prev === '' ? prev : prev + ' ';
-        return base + transcript;
-      });
-    }
-  }, [transcript]);
-
-  /* File upload */
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setText(content);
-    };
-
-    reader.readAsText(file);
-    e.target.value = '';
-  };
+  const inputSectionRef = useRef<HTMLDivElement>(null);
 
   const handleRecord = () => {
-    if (isListening) stopListening();
-    else startListening();
+    setIsRecording(!isRecording);
+    // In a real app, this would start/stop voice recording
   };
 
-  /* Run AI analysis */
-  const handleAnalyze = async () => {
-
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-      const response = await fetch(`${apiUrl}/analyze-text`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed })
-      });
-
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
-
-      const data: AnalysisResponsePayload = await response.json();
-
-      setResult(data);
-
-    } catch (err: any) {
-
-      setError(err.message || 'Unexpected error');
-
-    } finally {
-
-      setLoading(false);
-
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === "text/plain") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        setInputText(text);
+        setHasData(true);
+      };
+      reader.readAsText(file);
     }
+  };
 
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    setHasData(e.target.value.trim().length > 0);
+  };
+
+  const scrollToInput = () => {
+    inputSectionRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-
-    <div style={{ position: "relative", minHeight: "100vh", overflow: "hidden" }}>
-
-      {/* BACKGROUND */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: -1
-        }}
-      >
-        <Grainient
-          color1="#0c5e0b"
-          color2="#46bd3d"
-          color3="#3e8603"
-          timeSpeed={0.25}
-          colorBalance={0}
-          warpStrength={1}
-          warpFrequency={5}
-          warpSpeed={2}
-          warpAmplitude={50}
-          blendAngle={0}
-          blendSoftness={0.05}
-          rotationAmount={500}
-          noiseScale={2}
-          grainAmount={0.1}
-          grainScale={2}
-          grainAnimated={false}
-          contrast={1.5}
-          gamma={1}
-          saturation={1}
-          centerX={0}
-          centerY={0}
-          zoom={0.9}
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated Gradient Background */}
+      <div className="fixed inset-0 w-full h-full z-0">
+        <Iridescence 
+          color={[0, 1, 0.3]}
+          mouseReact={true}
+          amplitude={0.1}
+          speed={1}
         />
       </div>
 
-      <main className="container">
-
-        {/* HERO */}
-
-        <h1 className="title mt-8">
-          Interactive Analytics <br /> Made Simple
-        </h1>
-
-        <p className="subtitle">
-          Monitor business performance with cross-filtering dashboards.
-          Get real-time insights across sales, revenue, and regional metrics.
-        </p>
-
-        {/* Upload Button */}
-
-        <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-
-          <button
-            className="btn"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Upload
-          </button>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".txt"
-            onChange={handleFileUpload}
-            style={{ display: "none" }}
-          />
-
-        </div>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-  {isSupported && (
-    <button
-      className={`voice-btn ${isListening ? "recording" : ""}`}
-      onClick={handleRecord}
-    >
-      {isListening ? "🎤 Stop Recording" : "🎤 Start Voice Input"}
-    </button>
-  )}
-</div>
-        {/* FEATURE CARDS */}
-
-        <div className="grid-2 mb-8">
-
-          <div className="glass-card">
-
-            <h3>Cross-Filtering</h3>
-
-            <p className="mt-2">
-              Interactive charts that update dynamically when you select
-              data points across visualizations.
-            </p>
-
-          </div>
-
-          <div className="glass-card">
-
-            <h3>Real-Time Metrics</h3>
-
-            <p className="mt-2">
-              Track revenue, sales, customers, and units sold with
-              year-over-year growth comparisons.
-            </p>
-
-          </div>
-
-          <div className="glass-card">
-
-            <h3>Fast & Responsive</h3>
-
-            <p className="mt-2">
-              Optimized for desktop viewing with smooth interactions
-              and accessible design.
-            </p>
-
-          </div>
-
-        </div>
-
-        {/* TEXT INPUT */}
-
-        <div className="glass-card" style={{ maxWidth: "900px", margin: "0 auto" }}>
-
-          <textarea
-            className="input-textarea mb-4"
-            placeholder="Paste or type your market intelligence here..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-
-          {isSupported && (
-
-            <button
-              className={`input-mode-btn ${isListening ? "recording" : ""}`}
-              onClick={handleRecord}
-            >
-              {isListening ? "Stop Recording" : "Record Voice"}
-            </button>
-
-          )}
-
-          <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
-
-            <button
-              className="btn"
-              disabled={!text.trim() || loading}
-              onClick={handleAnalyze}
-            >
-              {loading ? "Processing..." : "Run Analysis Pipeline"}
-            </button>
-
-          </div>
-
-          {loading && (
-
-            <div style={{ textAlign: "center", marginTop: "2rem" }}>
-              <div className="loader" />
-              <p>Running AI pipeline...</p>
-            </div>
-
-          )}
-
-          {error && (
-
-            <div
-              className="mt-4"
-              style={{
-                background: "rgba(239,68,68,0.1)",
-                padding: "1rem",
-                borderRadius: "8px",
-                color: "#ff8a8a",
-                textAlign: "center"
-              }}
-            >
-              {error}
-            </div>
-
-          )}
-
-        </div>
-
-        {/* RESULT */}
-
-        {result && !loading && (
-
-          <>
-            <AnalysisResult data={result} />
-
-            <div style={{ textAlign: "center", marginTop: "3rem" }}>
-
-              <button
-                className="btn"
-                onClick={() => {
-                  setResult(null);
-                  setText('');
-                }}
+      {/* Content */}
+      <div className="relative z-10">
+        {/* Navigation */}
+        <motion.nav 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          className="w-full max-w-[1400px] mx-auto px-6 py-6"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <motion.div 
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-lg flex items-center justify-center shadow-lg"
               >
-                Analyze Another
-              </button>
-
+                <BarChart3 className="w-6 h-6 text-emerald-800" />
+              </motion.div>
+              <span className="text-xl font-semibold text-white">Analytics</span>
             </div>
-          </>
+            {hasData && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <button
+                  onClick={() => alert('Dashboard feature coming soon!')}
+                  className="px-6 py-2.5 bg-white/90 backdrop-blur-sm hover:bg-white text-emerald-900 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"
+                >
+                  View Dashboard
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </div>
+        </motion.nav>
 
-        )}
+        {/* Hero Section */}
+        <div className="w-full max-w-[1400px] mx-auto px-6 py-8 flex flex-col items-center justify-center text-center min-h-screen">
+          <div className="max-w-4xl mx-auto space-y-6">
+            <motion.div
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              <h1 className="text-6xl font-semibold text-white tracking-tight leading-tight">
+                Interactive Analytics
+                <br />
+                <span className="text-white/90">Made Simple</span>
+              </h1>
+            </motion.div>
+            
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="text-xl text-white/80 max-w-2xl mx-auto leading-relaxed"
+            >
+              Monitor business performance with cross-filtering dashboards. 
+              Get real-time insights across sales, revenue, and regional metrics.
+            </motion.p>
 
-      </main>
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+              className="flex items-center justify-center gap-4 pt-4"
+            >
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={scrollToInput}
+                className="px-8 py-4 bg-white hover:bg-gray-50 text-emerald-900 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-xl font-medium"
+              >
+                <ChevronDown className="w-5 h-5" />
+                <span>Get Started</span>
+              </motion.button>
+            </motion.div>
+          </div>
 
+          {/* Feature Cards */}
+          <motion.div 
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.8 }}
+            className="grid grid-cols-3 gap-6 max-w-5xl mx-auto mt-12"
+          >
+            {[
+              { icon: Filter, title: "Cross-Filtering", description: "Interactive charts that update dynamically when you select data points across visualizations.", delay: 0 },
+              { icon: TrendingUp, title: "Real-Time Metrics", description: "Track revenue, sales, customers, and units sold with year-over-year growth comparisons.", delay: 0.1 },
+              { icon: Zap, title: "Fast & Responsive", description: "Optimized for desktop viewing with smooth interactions and accessible design.", delay: 0.2 }
+            ].map((feature, index) => (
+              <motion.div
+                key={index}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.6, delay: 1 + feature.delay }}
+                whileHover={{ y: -8, scale: 1.02 }}
+                className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6 text-left hover:bg-white/15 transition-all duration-300 cursor-pointer group"
+              >
+                <motion.div 
+                  whileHover={{ rotate: [0, -10, 10, -10, 0], scale: 1.1 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors"
+                >
+                  <feature.icon className="w-6 h-6 text-white" />
+                </motion.div>
+                <h3 className="text-lg font-medium text-white mb-2">{feature.title}</h3>
+                <p className="text-white/70 text-sm leading-relaxed">
+                  {feature.description}
+                </p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Scroll Indicator */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 1.6 }}
+            className="mt-8 flex flex-col items-center cursor-pointer"
+            onClick={scrollToInput}
+          >
+            <p className="text-white/60 text-sm mb-2">Upload your data to get started</p>
+            <motion.div
+              animate={{ y: [0, 10, 0] }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+            >
+              <ChevronDown className="w-8 h-8 text-white/60" />
+            </motion.div>
+          </motion.div>
+
+          {/* Input Section */}
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1.4 }}
+            className="w-full max-w-3xl mx-auto mt-16"
+            ref={inputSectionRef}
+          >
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl">
+              <div className="relative">
+                <textarea
+                  value={inputText}
+                  onChange={handleTextChange}
+                  placeholder="Paste or type your market intelligence here..."
+                  className="w-full h-48 bg-black/20 text-white placeholder:text-white/40 border border-white/10 rounded-xl p-4 pr-28 resize-none focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
+                />
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 bg-white/20 hover:bg-white/30"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-5 h-5 text-white/80" />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    animate={isRecording ? { 
+                      boxShadow: ["0 0 0 0 rgba(239, 68, 68, 0.7)", "0 0 0 10px rgba(239, 68, 68, 0)"],
+                    } : {}}
+                    transition={isRecording ? { repeat: Infinity, duration: 1.5 } : {}}
+                    onClick={handleRecord}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      isRecording 
+                        ? "bg-red-500 hover:bg-red-600" 
+                        : "bg-white/20 hover:bg-white/30"
+                    }`}
+                  >
+                    <Mic className={`w-5 h-5 ${isRecording ? "text-white" : "text-white/80"}`} />
+                  </motion.button>
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".txt"
+                  className="hidden"
+                />
+              </div>
+              
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full mt-6 px-6 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg font-medium group ${
+                  hasData 
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                    : "bg-gray-500/30 text-white/50 cursor-not-allowed"
+                }`}
+                disabled={!hasData}
+              >
+                <Play className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                Run Analysis Pipeline
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
     </div>
-
   );
 }
