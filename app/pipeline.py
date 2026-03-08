@@ -20,7 +20,7 @@ async def run_pipeline(raw_text: str) -> AnalysisResponse:
     signal_data = await extract_signal(raw_text)
     signal = SignalExtraction(**signal_data)
 
-    # Step 2: Get S&P 500 list and filter by sector, then select top 5 stocks
+    # Step 2: Get S&P 500 list and filter by sector, then select top 4 stocks
     sp500 = await get_sp500_stocks()
     sector_stocks = filter_by_sector(sp500, signal.sector)
     selected_tickers = await select_stocks(signal_data, sector_stocks)

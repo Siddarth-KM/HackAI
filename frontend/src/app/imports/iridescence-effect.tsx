@@ -1,3 +1,5 @@
+'use client';
+
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 import { useEffect, useRef } from 'react';
 
@@ -44,8 +46,8 @@ void main() {
 }
 `;
 
-export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude = 0.1, mouseReact = true, ...rest }) {
-  const ctnDom = useRef(null);
+export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude = 0.1, mouseReact = true, ...rest }: { color?: number[]; speed?: number; amplitude?: number; mouseReact?: boolean; [key: string]: unknown }) {
+  const ctnDom = useRef<HTMLDivElement>(null);
   const mousePos = useRef({ x: 0.5, y: 0.5 });
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude 
     const gl = renderer.gl;
     gl.clearColor(1, 1, 1, 1);
 
-    let program;
+    let program: Program | undefined;
 
     function resize() {
       const scale = 1;
@@ -88,23 +90,25 @@ export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude 
     });
 
     const mesh = new Mesh(gl, { geometry, program });
-    let animateId;
+    let animateId: number;
 
-    function update(t) {
+    function update(t: number) {
       animateId = requestAnimationFrame(update);
-      program.uniforms.uTime.value = t * 0.001;
+      if (program) program.uniforms.uTime.value = t * 0.001;
       renderer.render({ scene: mesh });
     }
     animateId = requestAnimationFrame(update);
     ctn.appendChild(gl.canvas);
 
-    function handleMouseMove(e) {
+    function handleMouseMove(e: MouseEvent) {
       const rect = ctn.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
       mousePos.current = { x, y };
-      program.uniforms.uMouse.value[0] = x;
-      program.uniforms.uMouse.value[1] = y;
+      if (program) {
+        program.uniforms.uMouse.value[0] = x;
+        program.uniforms.uMouse.value[1] = y;
+      }
     }
     if (mouseReact) {
       ctn.addEventListener('mousemove', handleMouseMove);

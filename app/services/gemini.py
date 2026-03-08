@@ -82,7 +82,7 @@ Raw text:
 async def select_stocks(
     signal: dict, stocks: list[dict[str, str]]
 ) -> list[str]:
-    """Use Gemini to select the top 5 S&P 500 stocks most affected by the signal."""
+    """Use Gemini to select the top 4 S&P 500 stocks most affected by the signal."""
     client = _get_client()
 
     stock_list = "\n".join(
@@ -90,7 +90,7 @@ async def select_stocks(
     )
 
     prompt = f"""You are a senior quantitative researcher. Based on the investment signal below,
-select the 5 stocks from the provided list that would be MOST affected by this signal.
+select the 4 stocks from the provided list that would be MOST affected by this signal.
 
 Investment Signal:
 - Summary: {signal['signal_summary']}
@@ -101,7 +101,7 @@ Investment Signal:
 Available stocks:
 {stock_list}
 
-Return ONLY a JSON array of exactly 5 ticker symbols, e.g. ["AAPL", "MSFT", "GOOGL", "AMZN", "META"].
+Return ONLY a JSON array of exactly 4 ticker symbols, e.g. ["AAPL", "MSFT", "GOOGL", "AMZN"].
 No explanation, no markdown, no code blocks. Just the JSON array."""
 
     text = _call_gemini(client, prompt)
