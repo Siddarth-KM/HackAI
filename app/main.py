@@ -60,15 +60,38 @@ async def _run_pipeline_safe(raw_text: str) -> AnalysisResponse:
 
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze(file: UploadFile = File(...)):
-    """Accept a text file and return a full investment signal analysis."""
-    if not file.filename.endswith(".txt"):
-        raise HTTPException(status_code=400, detail="Only .txt files are accepted.")
-
+    """Accept a text, PDF, or CSV file and return a full investment signal analysis."""
+    filename = (file.filename or "").lower()
     content = await file.read()
-    raw_text = content.decode("utf-8").strip()
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Parse based on file type
+    if filename.endswith(".pdf"):
+        import io
+        from PyPDF2 import PdfReader
+        try:
+            reader = PdfReader(io.BytesIO(content))
+            raw_text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
+    elif filename.endswith(".csv"):
+        import io, csv
+        try:
+            text_content = content.decode("utf-8")
+            reader = csv.reader(io.StringIO(text_content))
+            rows = list(reader)
+            raw_text = "\n".join(", ".join(row) for row in rows).strip()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read CSV: {str(e)}")
+    elif filename.endswith(".txt"):
+        raw_text = content.decode("utf-8").strip()
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Upload .txt, .pdf, or .csv files.")
 
     if not raw_text:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        raise HTTPException(status_code=400, detail="No text could be extracted from the file.")
 
     return await _run_pipeline_safe(raw_text)
 
@@ -94,13 +117,8 @@ async def tts(request: TTSRequest):
         return Response(content=audio_bytes, media_type="audio/mpeg")
     except Exception as e:
         error_msg = str(e)
-        if "401" in error_msg or "invalid" in error_msg.lower():
-            raise HTTPException(
-                status_code=401,
-                detail="ElevenLabs API key error — check ELEVENLABS_API_KEY in .env"
-            )
-        print(f"TTS error: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"TTS failed: {error_msg}")
+        print(f"TTS error: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @app.post("/stt")
@@ -116,11 +134,6 @@ async def stt(file: UploadFile = File(...)):
     except Exception as e:
         error_msg = str(e)
         print(f"STT error: {error_msg}")
-        # Check for actual 401 (unauthorized) from ElevenLabs
-        if "returned 401" in error_msg:
-            raise HTTPException(
-                status_code=401,
-                detail="ElevenLabs API key error — check ELEVENLABS_API_KEY in .env"
-            )
-        raise HTTPException(status_code=500, detail=f"STT failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
 

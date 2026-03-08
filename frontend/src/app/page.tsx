@@ -32,21 +32,44 @@ export default function Home() {
     }
   }, [transcript]);
 
-  /* File upload */
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-
+  /* File upload — .txt goes to textarea, .pdf/.csv go directly to /analyze */
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setText(content);
-    };
-
-    reader.readAsText(file);
     e.target.value = '';
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (ext === 'txt') {
+      const reader = new FileReader();
+      reader.onload = (event) => setText(event.target?.result as string);
+      reader.readAsText(file);
+      return;
+    }
+
+    // PDF or CSV — send directly to /analyze as multipart
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${apiUrl}/analyze`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server returned ${response.status}`);
+      }
+      const data: AnalysisResponsePayload = await response.json();
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || 'File analysis failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRecord = () => {
@@ -158,7 +181,7 @@ export default function Home() {
           <input
             type="file"
             ref={fileInputRef}
-            accept=".txt"
+            accept=".txt,.pdf,.csv"
             onChange={handleFileUpload}
             style={{ display: "none" }}
           />
