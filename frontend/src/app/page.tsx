@@ -87,9 +87,9 @@ export default function Landing() {
       {/* ===== HERO SECTION with animated background ===== */}
       <div className="relative min-h-screen overflow-hidden">
         {/* Animated Gradient Background - only covers hero */}
-        <div className="absolute inset-0 w-full h-full z-0">
+        <div className="absolute inset-0 w-full h-full z-0 blur-in-lg">
           <Iridescence 
-            color={[0, 1, 0.3]}
+            color={[0, 0.7, 0.3]}
             mouseReact={true}
             amplitude={0.1}
             speed={1}
