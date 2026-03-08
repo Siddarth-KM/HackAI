@@ -1,24 +1,101 @@
-import { Link } from "react-router";
-import { BarChart3, TrendingUp, Filter, Zap, Upload, ArrowRight, Mic, Sparkles, Play, ChevronDown } from "lucide-react";
-import Iridescence from "../imports/iridescence-effect";
+'use client';
+
+import { BarChart3, TrendingUp, Filter, Zap, Upload, ArrowRight, Mic, Sparkles, Play, ChevronDown, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
+import AnalysisResult from "../components/AnalysisResult";
+import GeminiChat from "../components/GeminiChat";
+
+// Dynamically import Iridescence with SSR disabled to prevent WebGL crashes
+const Iridescence = dynamic(() => import("./imports/iridescence-effect"), {
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900" />,
+});
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function Landing() {
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [hasData, setHasData] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputSectionRef = useRef<HTMLDivElement>(null);
+  const resultSectionRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const handleRecord = () => {
-    setIsRecording(!isRecording);
-    // In a real app, this would start/stop voice recording
-  };
+  // --- Voice Recording (ElevenLabs STT) ---
+  const handleRecord = useCallback(async () => {
+    if (isRecording) {
+      // Stop recording
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') return;
 
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        recorder.stream.getTracks().forEach(t => t.stop());
+
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        chunksRef.current = [];
+        if (blob.size === 0) return;
+
+        setIsTranscribing(true);
+        try {
+          const formData = new FormData();
+          formData.append('file', blob, 'recording.webm');
+          const res = await fetch(`${API_URL}/stt`, { method: 'POST', body: formData });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.text) {
+              setInputText(prev => prev ? prev + ' ' + data.text : data.text);
+              setHasData(true);
+            }
+          } else {
+            const err = await res.json().catch(() => ({}));
+            console.error('STT error:', err.detail || res.status);
+          }
+        } catch (err) {
+          console.error('STT network error:', err);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.stop();
+    } else {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream, {
+          mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm',
+        });
+        chunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start(250);
+        setIsRecording(true);
+      } catch {
+        alert('Microphone access denied. Please allow microphone permissions.');
+      }
+    }
+  }, [isRecording]);
+
+  // --- File Upload ---
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type === "text/plain") {
+    if (!file) return;
+
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.txt')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
@@ -26,12 +103,73 @@ export default function Landing() {
         setHasData(true);
       };
       reader.readAsText(file);
+    } else if (name.endsWith('.pdf') || name.endsWith('.csv')) {
+      // For PDF/CSV, send directly to /analyze endpoint
+      runAnalysisWithFile(file);
     }
   };
 
+  // --- Text Change ---
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
     setHasData(e.target.value.trim().length > 0);
+  };
+
+  // --- Run Analysis (text) ---
+  const runAnalysis = useCallback(async () => {
+    if (!inputText.trim() || isAnalyzing) return;
+
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+
+    try {
+      const res = await fetch(`${API_URL}/analyze-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputText }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      setAnalysisResult(data);
+      // Scroll to results
+      setTimeout(() => resultSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+    } catch (err: any) {
+      setAnalysisError(err.message || 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [inputText, isAnalyzing]);
+
+  // --- Run Analysis (file) ---
+  const runAnalysisWithFile = async (file: File) => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/analyze`, { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      setAnalysisResult(data);
+      setTimeout(() => resultSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+    } catch (err: any) {
+      setAnalysisError(err.message || 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const scrollToInput = () => {
@@ -41,10 +179,10 @@ export default function Landing() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Gradient Background */}
-      <div className="fixed inset-0 w-full h-full z-0">
+      <div className="fixed inset-0 w-full h-full z-0 pointer-events-none">
         <Iridescence 
           color={[0, 1, 0.3]}
-          mouseReact={true}
+          mouseReact={false}
           amplitude={0.1}
           speed={1}
         />
@@ -69,17 +207,17 @@ export default function Landing() {
               </motion.div>
               <span className="text-xl font-semibold text-white">Analytics</span>
             </div>
-            {hasData && (
+            {analysisResult && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5 }}
               >
                 <button
-                  onClick={() => alert('Dashboard feature coming soon!')}
+                  onClick={() => resultSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
                   className="px-6 py-2.5 bg-white/90 backdrop-blur-sm hover:bg-white text-emerald-900 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"
                 >
-                  View Dashboard
+                  View Results
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </motion.div>
@@ -215,39 +353,95 @@ export default function Landing() {
                     } : {}}
                     transition={isRecording ? { repeat: Infinity, duration: 1.5 } : {}}
                     onClick={handleRecord}
+                    disabled={isTranscribing}
                     className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isRecording 
-                        ? "bg-red-500 hover:bg-red-600" 
-                        : "bg-white/20 hover:bg-white/30"
+                      isTranscribing
+                        ? "bg-yellow-500/50 cursor-wait"
+                        : isRecording 
+                          ? "bg-red-500 hover:bg-red-600" 
+                          : "bg-white/20 hover:bg-white/30"
                     }`}
                   >
-                    <Mic className={`w-5 h-5 ${isRecording ? "text-white" : "text-white/80"}`} />
+                    {isTranscribing ? (
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                    ) : (
+                      <Mic className={`w-5 h-5 ${isRecording ? "text-white" : "text-white/80"}`} />
+                    )}
                   </motion.button>
                 </div>
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
-                  accept=".txt"
+                  accept=".txt,.pdf,.csv"
                   className="hidden"
                 />
               </div>
+
+              {/* Recording / Transcribing indicator */}
+              {(isRecording || isTranscribing) && (
+                <div className="mt-3 flex items-center gap-2 text-sm">
+                  {isRecording && (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-red-300">Recording... click mic to stop</span>
+                    </>
+                  )}
+                  {isTranscribing && (
+                    <>
+                      <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+                      <span className="text-emerald-300">Transcribing audio...</span>
+                    </>
+                  )}
+                </div>
+              )}
               
+              {/* Error display */}
+              {analysisError && (
+                <div className="mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm">
+                  {analysisError}
+                </div>
+              )}
+
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={runAnalysis}
                 className={`w-full mt-6 px-6 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg font-medium group ${
-                  hasData 
+                  hasData && !isAnalyzing
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
                     : "bg-gray-500/30 text-white/50 cursor-not-allowed"
                 }`}
-                disabled={!hasData}
+                disabled={!hasData || isAnalyzing}
               >
-                <Play className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                Run Analysis Pipeline
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    Run Analysis Pipeline
+                  </>
+                )}
               </motion.button>
             </div>
           </motion.div>
+
+          {/* Analysis Results */}
+          {analysisResult && (
+            <motion.div
+              ref={resultSectionRef}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="w-full max-w-5xl mx-auto mt-16 mb-16 space-y-6"
+            >
+              <AnalysisResult data={analysisResult} />
+              <GeminiChat context={analysisResult.summary_recommendation || JSON.stringify(analysisResult.signal)} />
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

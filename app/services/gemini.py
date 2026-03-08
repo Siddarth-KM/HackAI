@@ -142,3 +142,40 @@ Stock Analysis Data:
 Write ONLY the recommendation paragraph. No headers, no bullet points, no markdown."""
 
     return _call_gemini(client, prompt)
+
+
+async def chat_with_context(
+    context: str,
+    user_message: str,
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """Chat with Gemini using the analysis summary as context."""
+    client = _get_client()
+
+    history_text = ""
+    if history:
+        for msg in history[-10:]:  # Keep last 10 messages to avoid token limits
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            history_text += f"\n{role.upper()}: {content}"
+
+    prompt = f"""You are a helpful financial analyst assistant for HackAI Market Intelligence.
+You have access to the following investment analysis that was generated for the user:
+
+--- ANALYSIS CONTEXT ---
+{context}
+--- END CONTEXT ---
+
+Use this context to answer the user's questions about the analysis, stocks, signals,
+sentiment, or any related financial topics. Be concise, clear, and helpful.
+If the user asks about something not covered in the context, you can provide general
+financial knowledge but note that it's outside the specific analysis.
+
+{f"Previous conversation:{history_text}" if history_text else ""}
+
+USER: {user_message}
+
+Respond naturally and concisely. Do not use markdown headers. Keep responses under 150 words unless more detail is specifically requested."""
+
+    return _call_gemini(client, prompt)
+

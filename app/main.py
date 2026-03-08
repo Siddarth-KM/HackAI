@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.models import AnalysisResponse
 from app.pipeline import run_pipeline
 from app.services.elevenlabs import text_to_speech, speech_to_text
+from app.services.gemini import chat_with_context
 
 app = FastAPI(
     title="Text-to-Investment Signal Pipeline",
@@ -31,6 +32,11 @@ class AnalyzeTextRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
+
+class ChatRequest(BaseModel):
+    message: str
+    context: str = ""
+    history: list[dict[str, str]] = []
 
 
 @app.get("/health")
@@ -137,3 +143,20 @@ async def stt(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@app.post("/chat")
+async def chat(request: ChatRequest):
+    """Chat with Gemini using analysis context."""
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message is empty.")
+
+    try:
+        response = await chat_with_context(
+            context=request.context,
+            user_message=request.message,
+            history=request.history,
+        )
+        return {"response": response}
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Chat error: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {error_msg}")
