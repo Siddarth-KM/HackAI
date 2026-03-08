@@ -23,7 +23,10 @@ async def text_to_speech(text: str) -> bytes:
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
+        if response.status_code != 200:
+            body = response.text
+            print(f"ElevenLabs TTS error {response.status_code}: {body}")
+            raise Exception(f"ElevenLabs TTS returned {response.status_code}: {body}")
         return response.content
 
 

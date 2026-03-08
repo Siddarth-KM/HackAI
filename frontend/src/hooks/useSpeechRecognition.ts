@@ -1,24 +1,51 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
-interface UseAudioRecorderReturn {
-  isRecording: boolean;
-  isTranscribing: boolean;
-  startRecording: () => void;
-  stopRecording: () => Promise<string>;
-  error: string | null;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const TRANSCRIBE_INTERVAL_MS = 3000;
+
+async function transcribeBlob(blob: Blob): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', blob, 'recording.webm');
+  const res = await fetch(`${API_URL}/stt`, { method: 'POST', body: formData });
+  if (!res.ok) return '';
+  const data = await res.json();
+  return data.text || '';
 }
 
-export default function useAudioRecorder(): UseAudioRecorderReturn {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function useAudioRecorder() {
+  const [transcript, setTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+
+  useEffect(() => {
+    setIsSupported(!!navigator.mediaDevices?.getUserMedia);
+  }, []);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcribingRef = useRef(false);
 
-  const startRecording = useCallback(async () => {
-    setError(null);
+  const transcribeCurrentChunks = useCallback(async () => {
+    if (transcribingRef.current || chunksRef.current.length === 0) return;
+    transcribingRef.current = true;
+
+    try {
+      const blob = new Blob([...chunksRef.current], { type: 'audio/webm' });
+      if (blob.size === 0) return;
+      const text = await transcribeBlob(blob);
+      if (text) setTranscript(text);
+    } catch (err) {
+      console.error('Live STT error:', err);
+    } finally {
+      transcribingRef.current = false;
+    }
+  }, []);
+
+  const startListening = useCallback(async () => {
+    setTranscript('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
@@ -30,83 +57,49 @@ export default function useAudioRecorder(): UseAudioRecorderReturn {
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(250); // Collect chunks every 250ms
-      setIsRecording(true);
-    } catch (err: any) {
-      setError('Microphone access denied. Please allow mic access and try again.');
-      console.error('MediaRecorder error:', err);
+      mediaRecorder.start(250);
+      setIsListening(true);
+
+      // Periodically transcribe accumulated audio
+      intervalRef.current = setInterval(transcribeCurrentChunks, TRANSCRIBE_INTERVAL_MS);
+    } catch (err) {
+      console.error('Mic access error:', err);
     }
-  }, []);
+  }, [transcribeCurrentChunks]);
 
-  const stopRecording = useCallback(async (): Promise<string> => {
-    return new Promise((resolve) => {
-      const mediaRecorder = mediaRecorderRef.current;
-      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        resolve('');
-        return;
+  const stopListening = useCallback(() => {
+    // Stop periodic transcription
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+    mediaRecorder.onstop = async () => {
+      setIsListening(false);
+      mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+
+      // Final transcription of the complete audio
+      const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      chunksRef.current = [];
+      if (audioBlob.size === 0) return;
+
+      try {
+        const text = await transcribeBlob(audioBlob);
+        if (text) setTranscript(text);
+      } catch (err) {
+        console.error('Final STT error:', err);
       }
+    };
 
-      mediaRecorder.onstop = async () => {
-        setIsRecording(false);
-
-        // Stop all tracks to release the mic
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        chunksRef.current = [];
-
-        if (audioBlob.size === 0) {
-          resolve('');
-          return;
-        }
-
-        // Send to backend /stt endpoint
-        setIsTranscribing(true);
-        try {
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-          const formData = new FormData();
-          formData.append('file', audioBlob, 'recording.webm');
-
-          const response = await fetch(`${apiUrl}/stt`, {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            const msg = errData.detail || `STT failed with status ${response.status}`;
-            setError(msg);
-            console.warn('STT error response:', msg);
-            resolve('');
-            return;
-          }
-
-          const data = await response.json();
-          resolve(data.text || '');
-        } catch (err: any) {
-          setError(err.message || 'Transcription failed — check your connection and ElevenLabs API key');
-          console.warn('STT fetch error:', err);
-          resolve('');
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-
-      mediaRecorder.stop();
-    });
+    mediaRecorder.stop();
   }, []);
 
-  return {
-    isRecording,
-    isTranscribing,
-    startRecording,
-    stopRecording,
-    error,
-  };
+  return { transcript, isListening, isSupported, startListening, stopListening };
 }
