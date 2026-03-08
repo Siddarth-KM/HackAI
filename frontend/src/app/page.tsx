@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, TrendingUp, Filter, Zap, Upload, Mic, Play, ChevronDown, Loader2 } from "lucide-react";
+import { BarChart3, TrendingUp, Filter, Zap, Upload, Mic, Play, ChevronDown, Loader2, ChevronUp } from "lucide-react";
 import Iridescence from "./imports/iridescence-effect";
 import { motion } from "motion/react";
 import { useState, useRef, useEffect } from "react";
@@ -14,6 +14,8 @@ export default function Landing() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponsePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [persona, setPersona] = useState('Default');
+  const [personaOpen, setPersonaOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputSectionRef = useRef<HTMLDivElement>(null);
   const resultsSectionRef = useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export default function Landing() {
       const res = await fetch(`${API_URL}/analyze-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText }),
+        body: JSON.stringify({ text: inputText, persona }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: 'Analysis failed' }));
@@ -274,10 +276,40 @@ export default function Landing() {
                 />
               </div>
               
+              <div className="flex gap-3 mt-6">
+                {/* Persona Dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPersonaOpen(!personaOpen)}
+                    className="h-full px-4 py-3.5 rounded-xl bg-white/10 border border-white/10 text-white text-sm font-medium flex items-center gap-2 hover:bg-white/15 transition-all min-w-[160px] justify-between"
+                  >
+                    <span className="truncate">{persona}</span>
+                    <ChevronUp className={`w-4 h-4 text-white/60 transition-transform ${personaOpen ? '' : 'rotate-180'}`} />
+                  </button>
+                  {personaOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 w-full bg-black/80 backdrop-blur-xl border border-white/15 rounded-xl overflow-hidden shadow-2xl z-50">
+                      {['Default', 'Ray Dalio', 'Warren Buffett', 'Simplify', 'Quant'].map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => { setPersona(p); setPersonaOpen(false); }}
+                          className={`w-full px-4 py-2.5 text-left text-sm transition-all ${
+                            persona === p
+                              ? 'bg-emerald-600/30 text-emerald-300'
+                              : 'text-white/80 hover:bg-white/10'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
               <motion.button
                 whileHover={hasData && !isAnalyzing ? { scale: 1.02 } : {}}
                 whileTap={hasData && !isAnalyzing ? { scale: 0.98 } : {}}
-                className={`w-full mt-6 px-6 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg font-medium group ${
+                className={`flex-1 px-6 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg font-medium group ${
                   hasData && !isAnalyzing
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
                     : "bg-gray-500/30 text-white/50 cursor-not-allowed"
@@ -291,6 +323,7 @@ export default function Landing() {
                   <><Play className="w-5 h-5 group-hover:translate-x-1 transition-transform" /> Run Analysis Pipeline</>
                 )}
               </motion.button>
+              </div>
 
               {error && (
                 <div className="mt-4 p-3 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm">

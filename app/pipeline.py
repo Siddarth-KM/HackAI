@@ -13,7 +13,7 @@ from app.services.alpha_vantage import get_stock_sentiment
 from app.services.charts import generate_returns_chart
 
 
-async def run_pipeline(raw_text: str) -> AnalysisResponse:
+async def run_pipeline(raw_text: str, persona: str = "Default") -> AnalysisResponse:
     """Run the full text-to-investment-signal pipeline."""
 
     # Step 1: Extract signal from raw text via Gemini
@@ -77,7 +77,7 @@ async def run_pipeline(raw_text: str) -> AnalysisResponse:
         for sa in stock_analyses
     ]
 
-    summary = await generate_summary(signal_data, analyses_for_summary)
+    summary = await generate_summary(signal_data, analyses_for_summary, persona=persona)
 
     return AnalysisResponse(
         signal=signal,

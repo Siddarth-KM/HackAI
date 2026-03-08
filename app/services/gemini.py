@@ -111,16 +111,27 @@ No explanation, no markdown, no code blocks. Just the JSON array."""
     return json.loads(text)
 
 
+PERSONA_PROMPTS = {
+    "Ray Dalio": "You are Ray Dalio, founder of Bridgewater Associates. Write in your characteristic style — focus on macroeconomic cycles, diversification principles, and radical transparency. Reference how this fits into the broader economic machine.",
+    "Warren Buffett": "You are Warren Buffett, the Oracle of Omaha. Write in your folksy, wisdom-filled style — emphasize intrinsic value, long-term compounding, competitive moats, and margin of safety. Use simple analogies.",
+    "Simplify": "You are a financial educator explaining to a beginner investor. Use very simple language, avoid jargon, and break down the recommendation so anyone can understand it. Be encouraging and clear.",
+    "Quant": "You are an elite quantitative analyst at a top hedge fund. Be precise and data-driven — reference specific return figures, sentiment scores, and statistical reasoning. Use technical financial language and quantitative frameworks.",
+}
+
+
 async def generate_summary(
     signal: dict,
     stock_analyses: list[dict],
+    persona: str = "Default",
 ) -> str:
     """Generate a final recommendation summary paragraph using Gemini."""
     client = _get_client()
 
     analyses_text = json.dumps(stock_analyses, indent=2, default=str)
 
-    prompt = f"""You are a senior quantitative researcher writing an investment recommendation.
+    persona_instruction = PERSONA_PROMPTS.get(persona, "You are a senior quantitative researcher writing an investment recommendation.")
+
+    prompt = f"""{persona_instruction}
 
 Based on the following signal extraction and stock analysis data, write a concise recommendation
 paragraph (4-6 sentences) that summarizes:
