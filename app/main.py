@@ -29,6 +29,7 @@ app.add_middleware(
 # --- Request models ---
 class AnalyzeTextRequest(BaseModel):
     text: str
+    persona: str = "Default"
 
 class TTSRequest(BaseModel):
     text: str
@@ -44,10 +45,10 @@ async def health_check():
     return {"status": "ok"}
 
 
-async def _run_pipeline_safe(raw_text: str) -> AnalysisResponse:
+async def _run_pipeline_safe(raw_text: str, persona: str = "Default") -> AnalysisResponse:
     """Shared pipeline runner with error handling."""
     try:
-        return await run_pipeline(raw_text)
+        return await run_pipeline(raw_text, persona=persona)
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=502,
@@ -109,7 +110,7 @@ async def analyze_text(request: AnalyzeTextRequest):
     if not raw_text:
         raise HTTPException(status_code=400, detail="Text input is empty.")
 
-    return await _run_pipeline_safe(raw_text)
+    return await _run_pipeline_safe(raw_text, persona=request.persona)
 
 
 @app.post("/tts")

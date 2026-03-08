@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion } from 'motion/react';
 
 // Aligning with the Pydantic models in the backend
 interface SignalExtraction {
@@ -8,6 +9,7 @@ interface SignalExtraction {
   sector: string;
   timeframe: string;
   direction: string;
+  reliability_score: number;
 }
 
 interface StockReturns {
@@ -52,10 +54,10 @@ interface AnalysisResultProps {
 }
 
 const FormatPct = ({ value }: { value: number | null }) => {
-  if (value === null) return <span>N/A</span>;
+  if (value === null) return <span className="text-white/50">N/A</span>;
   const isPositive = value >= 0;
   return (
-    <span className={isPositive ? 'text-success' : 'text-danger'}>
+    <span className={isPositive ? 'text-emerald-400' : 'text-red-400'}>
       {isPositive ? '+' : ''}{value.toFixed(2)}%
     </span>
   );
@@ -64,10 +66,10 @@ const FormatPct = ({ value }: { value: number | null }) => {
 type Timeframe = '1W' | '1M' | '3M' | '1Y';
 
 const TIMEFRAMES: { key: Timeframe; label: string }[] = [
-  { key: '1W', label: '1 Week' },
-  { key: '1M', label: '1 Month' },
-  { key: '3M', label: '3 Months' },
-  { key: '1Y', label: '1 Year' },
+  { key: '1W', label: '1W' },
+  { key: '1M', label: '1M' },
+  { key: '3M', label: '3M' },
+  { key: '1Y', label: '1Y' },
 ];
 
 function getReturnForTimeframe(returns: StockReturns, tf: Timeframe): number | null {
@@ -82,9 +84,9 @@ function getReturnForTimeframe(returns: StockReturns, tf: Timeframe): number | n
 function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: number }) {
   if (value === null) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <div style={{ width: '100%', height: '28px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>N/A</span>
+      <div className="flex items-center h-7">
+        <div className="w-full h-full bg-white/5 rounded flex items-center justify-center">
+          <span className="text-xs text-white/40">N/A</span>
         </div>
       </div>
     );
@@ -92,32 +94,41 @@ function ReturnBar({ value, maxAbsValue }: { value: number | null; maxAbsValue: 
 
   const isPositive = value >= 0;
   const widthPct = maxAbsValue > 0 ? (Math.abs(value) / maxAbsValue) * 100 : 0;
-  const barColor = isPositive ? 'var(--success)' : 'var(--danger)';
-  const barBg = isPositive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', height: '28px' }}>
-      <div style={{ flex: 1, height: '100%', background: 'rgba(0,0,0,0.35)', borderRadius: '4px', position: 'relative', overflow: 'hidden' }}>
+    <div className="flex items-center gap-3 h-7">
+      <div className="flex-1 h-full bg-black/40 rounded relative overflow-hidden">
         <div
+          className="absolute top-0 h-full rounded-sm transition-all duration-500"
           style={{
-            position: 'absolute',
-            top: 0,
             left: isPositive ? '50%' : `${50 - (widthPct / 2)}%`,
             width: `${widthPct / 2}%`,
-            height: '100%',
-            background: barBg,
-            borderLeft: isPositive ? `2px solid ${barColor}` : 'none',
-            borderRight: !isPositive ? `2px solid ${barColor}` : 'none',
-            borderRadius: '2px',
-            transition: 'width 0.5s ease-out, left 0.5s ease-out',
+            background: isPositive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+            borderLeft: isPositive ? '2px solid rgb(16, 185, 129)' : 'none',
+            borderRight: !isPositive ? '2px solid rgb(239, 68, 68)' : 'none',
           }}
         />
-        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '1px', background: 'rgba(255,255,255,0.15)' }} />
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/15" />
       </div>
-      <span style={{ minWidth: '72px', textAlign: 'right', fontWeight: 600, fontSize: '0.9rem', color: barColor }}>
+      <span className={`min-w-[72px] text-right font-semibold text-sm ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
         {isPositive ? '+' : ''}{value.toFixed(2)}%
       </span>
     </div>
+  );
+}
+
+// Glass card wrapper with scroll-triggered reveal
+function Card({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ y: 40, opacity: 0 }}
+      whileInView={{ y: 0, opacity: 1 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.6, ease: 'easeOut', delay }}
+      className={`bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 ${className}`}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -127,7 +138,6 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
   const [ttsState, setTtsState] = React.useState<'idle' | 'loading' | 'playing'>('idle');
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  // Cleanup TTS audio on unmount
   React.useEffect(() => {
     return () => {
       if (audioRef.current) {
@@ -179,41 +189,71 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
     }
   };
 
+  const directionColor = data.signal.direction.toLowerCase() === 'long'
+    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+    : 'bg-red-500/20 text-red-300 border-red-500/30';
+
   return (
-    <div style={{ animation: 'fadeIn 0.5s ease-out', marginTop: '3rem' }}>
+    <div className="space-y-6">
 
       {/* 1. Signal Overview */}
-      <div className="glass-card mb-8">
-        <div className="flex-between mb-4">
-          <h2>Investment Signal Detected</h2>
-          <span className={`badge ${data.signal.direction.toLowerCase()}`}>
-            {data.signal.direction.toUpperCase()}
-          </span>
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold text-white">Investment Signal Detected</h2>
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${directionColor}`}>
+              {data.signal.direction.toUpperCase()}
+            </span>
+          </div>
         </div>
-        <p style={{ fontSize: '1.2rem', lineHeight: '1.6', marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+        <p className="text-base text-white/70 leading-relaxed mb-5">
           {data.signal.signal_summary}
         </p>
-        <div className="flex-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+        <div className="flex items-center justify-between border-t border-white/10 pt-5">
           <div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Target Sector</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>{data.signal.sector}</div>
+            <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Target Sector</div>
+            <div className="text-lg font-medium text-white">{data.signal.sector}</div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Timeframe</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>{data.signal.timeframe}</div>
+          <div className="text-center">
+            <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Reliability</div>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    data.signal.reliability_score >= 70 ? 'bg-emerald-400' :
+                    data.signal.reliability_score >= 40 ? 'bg-yellow-400' : 'bg-red-400'
+                  }`}
+                  style={{ width: `${data.signal.reliability_score}%` }}
+                />
+              </div>
+              <span className={`text-lg font-bold ${
+                data.signal.reliability_score >= 70 ? 'text-emerald-400' :
+                data.signal.reliability_score >= 40 ? 'text-yellow-400' : 'text-red-400'
+              }`}>
+                {data.signal.reliability_score}
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Timeframe</div>
+            <div className="text-lg font-medium text-white">{data.signal.timeframe}</div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* 2. Comparative Returns with Timeframe Toggle */}
-      <div className="glass-card mb-8">
-        <div className="flex-between mb-6">
-          <h3>Stock Returns Comparison</h3>
-          <div className="timeframe-toggle">
+      {/* 2. Comparative Returns */}
+      <Card>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-medium text-white">Stock Returns Comparison</h3>
+          <div className="flex bg-white/10 rounded-lg p-0.5">
             {TIMEFRAMES.map(tf => (
               <button
                 key={tf.key}
-                className={`tf-btn ${selectedTimeframe === tf.key ? 'active' : ''}`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  selectedTimeframe === tf.key
+                    ? 'bg-white/20 text-white shadow-sm'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
                 onClick={() => setSelectedTimeframe(tf.key)}
               >
                 {tf.label}
@@ -221,116 +261,134 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {data.stock_analyses.map((stock, idx) => {
-            const returnVal = getReturnForTimeframe(stock.returns, selectedTimeframe);
-            return (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'center', gap: '1rem' }}>
-                <div>
-                  <span className="text-accent" style={{ fontWeight: 700, fontSize: '1rem' }}>{stock.returns.ticker}</span>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                    ${stock.returns.last_close?.toFixed(2) || 'N/A'}
-                  </span>
-                </div>
-                <ReturnBar value={returnVal} maxAbsValue={maxAbsValue} />
+        <div className="space-y-3">
+          {data.stock_analyses.map((stock, idx) => (
+            <div key={idx} className="grid gap-3 items-center" style={{ gridTemplateColumns: '130px 1fr' }}>
+              <div>
+                <span className="text-emerald-400 font-bold">{stock.returns.ticker}</span>
+                <span className="text-white/40 text-xs ml-2">
+                  ${stock.returns.last_close?.toFixed(2) || 'N/A'}
+                </span>
               </div>
-            );
-          })}
+              <ReturnBar value={getReturnForTimeframe(stock.returns, selectedTimeframe)} maxAbsValue={maxAbsValue} />
+            </div>
+          ))}
         </div>
-      </div>
+      </Card>
 
-      {/* 3. Matplotlib Charts Toggle */}
+      {/* 3. Charts Toggle */}
       {data.stock_analyses.some(s => s.chart_base64) && (
-        <div className="glass-card mb-8">
-          <div className="flex-between mb-4">
-            <h3>Detailed Return Charts</h3>
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-medium text-white">Detailed Return Charts</h3>
             <button
-              className={`btn ${showCharts ? '' : 'btn-outline'}`}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all"
               onClick={() => setShowCharts(!showCharts)}
-              style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
             >
               {showCharts ? 'Hide Charts' : 'Show Charts'}
             </button>
           </div>
           {showCharts && (
-            <div className="grid-2" style={{ marginTop: '1rem' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {data.stock_analyses.map((stock, idx) => (
                 stock.chart_base64 && (
-                  <div key={idx} style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '0.5rem', overflow: 'hidden' }}>
+                  <div key={idx} className="bg-white/95 rounded-xl p-2 overflow-hidden">
                     <img
                       src={`data:image/png;base64,${stock.chart_base64}`}
                       alt={`${stock.returns.ticker} returns chart`}
-                      style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '8px' }}
+                      className="w-full h-auto block rounded-lg"
                     />
                   </div>
                 )
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* 4. Stock Details Grid */}
-      <h3 className="mb-4">Individual Stock Analysis</h3>
-      <div className="grid-2 mb-8">
-        {data.stock_analyses.map((stock, idx) => (
-          <div key={idx} className="glass-card">
-            <div className="flex-between mb-4">
-              <h4 style={{ fontSize: '1.25rem' }}>
-                <span className="text-accent">{stock.returns.ticker}</span>
-              </h4>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                {stock.returns.company_name}
+      <div>
+        <motion.h3
+          initial={{ y: 30, opacity: 0 }}
+          whileInView={{ y: 0, opacity: 1 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="text-xl font-medium text-white mb-4"
+        >Individual Stock Analysis</motion.h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {data.stock_analyses.map((stock, idx) => (
+            <Card key={idx} delay={idx * 0.15}>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-bold text-emerald-400">{stock.returns.ticker}</h4>
+                <span className="text-sm text-white/50">{stock.returns.company_name}</span>
               </div>
-            </div>
-            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-              <div className="flex-between mb-2">
-                <span style={{ color: 'var(--text-secondary)' }}>Last Close</span>
-                <strong>${stock.returns.last_close?.toFixed(2) || 'N/A'}</strong>
+
+              <div className="bg-white/5 rounded-xl p-4 mb-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-white/50 text-sm">Last Close</span>
+                  <span className="text-white font-semibold">${stock.returns.last_close?.toFixed(2) || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50 text-sm">1W Return</span>
+                  <span className="font-semibold"><FormatPct value={stock.returns.week_return_pct} /></span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50 text-sm">1M Return</span>
+                  <span className="font-semibold"><FormatPct value={stock.returns.month_return_pct} /></span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50 text-sm">3M Return</span>
+                  <span className="font-semibold"><FormatPct value={stock.returns.three_month_return_pct} /></span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50 text-sm">1Y Return</span>
+                  <span className="font-semibold"><FormatPct value={stock.returns.year_return_pct} /></span>
+                </div>
               </div>
-              <div className="flex-between mb-2">
-                <span style={{ color: 'var(--text-secondary)' }}>1W Return</span>
-                <strong><FormatPct value={stock.returns.week_return_pct} /></strong>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-white/70">Average Sentiment</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                    stock.sentiment.average_sentiment != null && stock.sentiment.average_sentiment >= 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-red-500/20 text-red-300 border-red-500/30'
+                  }`}>
+                    {stock.sentiment.average_sentiment != null ? stock.sentiment.average_sentiment.toFixed(2) : 'N/A'}
+                  </span>
+                </div>
+                <div className="text-xs text-white/40">
+                  Based on {stock.sentiment.articles.length} recent articles
+                </div>
               </div>
-              <div className="flex-between mb-2">
-                <span style={{ color: 'var(--text-secondary)' }}>1M Return</span>
-                <strong><FormatPct value={stock.returns.month_return_pct} /></strong>
-              </div>
-              <div className="flex-between mb-2">
-                <span style={{ color: 'var(--text-secondary)' }}>3M Return</span>
-                <strong><FormatPct value={stock.returns.three_month_return_pct} /></strong>
-              </div>
-              <div className="flex-between">
-                <span style={{ color: 'var(--text-secondary)' }}>1Y Return</span>
-                <strong><FormatPct value={stock.returns.year_return_pct} /></strong>
-              </div>
-            </div>
-            <div>
-              <div className="flex-between mb-2">
-                <span style={{ fontSize: '0.9rem' }}>Average Sentiment</span>
-                <span className={`badge ${stock.sentiment.average_sentiment != null && stock.sentiment.average_sentiment >= 0 ? 'long' : 'short'}`}>
-                  {stock.sentiment.average_sentiment != null ? stock.sentiment.average_sentiment.toFixed(2) : 'N/A'}
-                </span>
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Based on {stock.sentiment.articles.length} recent articles
-              </div>
-            </div>
-          </div>
-        ))}
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* 5. Final Summary with TTS */}
-      <div className="glass-card mb-8" style={{ border: '1px solid var(--accent)' }}>
-        <div className="flex-between mb-4">
-          <h3 className="text-accent">AI Summary & Recommendation</h3>
+      <Card className="border-emerald-500/30">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-medium text-emerald-400">AI Summary & Recommendation</h3>
           <button
-            className={`tts-btn ${ttsState === 'playing' ? 'playing' : ''} ${ttsState === 'loading' ? 'loading' : ''}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              ttsState === 'playing'
+                ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                : ttsState === 'loading'
+                  ? 'bg-white/10 text-white/50 cursor-wait'
+                  : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+            }`}
             onClick={handleListenToSummary}
             disabled={ttsState === 'loading'}
           >
             {ttsState === 'loading' && (
-              <><div className="tts-spinner" /> Generating...</>
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Generating...
+              </>
             )}
             {ttsState === 'playing' && (
               <>
@@ -349,10 +407,10 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
             )}
           </button>
         </div>
-        <p style={{ lineHeight: '1.8', whiteSpace: 'pre-wrap', color: '#e4e4e7' }}>
+        <p className="text-white/80 leading-relaxed whitespace-pre-wrap">
           {data.summary_recommendation}
         </p>
-      </div>
+      </Card>
 
     </div>
   );

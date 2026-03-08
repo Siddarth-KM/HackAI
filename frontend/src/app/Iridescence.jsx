@@ -1,7 +1,7 @@
-'use client';
-
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 import { useEffect, useRef } from 'react';
+
+import '../components/Iridescence.css';
 
 const vertexShader = `
 attribute vec2 uv;
@@ -46,8 +46,8 @@ void main() {
 }
 `;
 
-export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude = 0.1, mouseReact = true, ...rest }: { color?: number[]; speed?: number; amplitude?: number; mouseReact?: boolean; [key: string]: unknown }) {
-  const ctnDom = useRef<HTMLDivElement>(null);
+export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude = 0.1, mouseReact = true, ...rest }) {
+  const ctnDom = useRef(null);
   const mousePos = useRef({ x: 0.5, y: 0.5 });
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude 
     const gl = renderer.gl;
     gl.clearColor(1, 1, 1, 1);
 
-    let program: Program | undefined;
+    let program;
 
     function resize() {
       const scale = 1;
@@ -90,25 +90,23 @@ export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude 
     });
 
     const mesh = new Mesh(gl, { geometry, program });
-    let animateId: number;
+    let animateId;
 
-    function update(t: number) {
+    function update(t) {
       animateId = requestAnimationFrame(update);
-      if (program) program.uniforms.uTime.value = t * 0.001;
+      program.uniforms.uTime.value = t * 0.001;
       renderer.render({ scene: mesh });
     }
     animateId = requestAnimationFrame(update);
     ctn.appendChild(gl.canvas);
 
-    function handleMouseMove(e: MouseEvent) {
+    function handleMouseMove(e) {
       const rect = ctn.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
       mousePos.current = { x, y };
-      if (program) {
-        program.uniforms.uMouse.value[0] = x;
-        program.uniforms.uMouse.value[1] = y;
-      }
+      program.uniforms.uMouse.value[0] = x;
+      program.uniforms.uMouse.value[1] = y;
     }
     if (mouseReact) {
       ctn.addEventListener('mousemove', handleMouseMove);
@@ -125,5 +123,5 @@ export default function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude 
     };
   }, [color, speed, amplitude, mouseReact]);
 
-  return <div ref={ctnDom} className="w-full h-full" {...rest} />;
+  return <div ref={ctnDom} className="iridescence-container" {...rest} />;
 }

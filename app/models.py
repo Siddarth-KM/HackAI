@@ -6,6 +6,7 @@ class SignalExtraction(BaseModel):
     sector: str
     timeframe: str
     direction: str  # "long" or "short"
+    reliability_score: int  # 1-100
 
 
 class StockReturns(BaseModel):

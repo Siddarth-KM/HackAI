@@ -65,6 +65,7 @@ Return a JSON object with exactly these fields:
 - "sector": The single most relevant GICS sector from this list: {json.dumps(GICS_SECTORS)}
 - "timeframe": The recommended investment timeframe. Must be one of: "1 month", "3 months", "6 months", "1 year"
 - "direction": Either "long" or "short" based on whether the signal is positive or negative for the sector.
+- "reliability_score": An integer from 1 to 100 rating how actionable and believable this signal is. Consider whether the claim is realistic and fact-checkable. For example, overhearing a conversation about a company's earnings beating expectations is highly plausible and actionable — that should score 85-95. But hearing "Google is going bankrupt" is obviously false and not actionable — that should score 5-15. Use your judgment on the plausibility, specificity, and source quality of the signal.
 
 Return ONLY valid JSON, no markdown formatting, no code blocks, no explanation.
 
@@ -82,7 +83,7 @@ Raw text:
 async def select_stocks(
     signal: dict, stocks: list[dict[str, str]]
 ) -> list[str]:
-    """Use Gemini to select the top 5 S&P 500 stocks most affected by the signal."""
+    """Use Gemini to select the top 4 S&P 500 stocks most affected by the signal."""
     client = _get_client()
 
     stock_list = "\n".join(
@@ -90,7 +91,7 @@ async def select_stocks(
     )
 
     prompt = f"""You are a senior quantitative researcher. Based on the investment signal below,
-select the 5 stocks from the provided list that would be MOST affected by this signal.
+select the 4 stocks from the provided list that would be MOST affected by this signal.
 
 Investment Signal:
 - Summary: {signal['signal_summary']}
@@ -101,7 +102,7 @@ Investment Signal:
 Available stocks:
 {stock_list}
 
-Return ONLY a JSON array of exactly 5 ticker symbols, e.g. ["AAPL", "MSFT", "GOOGL", "AMZN", "META"].
+Return ONLY a JSON array of exactly 4 ticker symbols, e.g. ["AAPL", "MSFT", "GOOGL", "AMZN"].
 No explanation, no markdown, no code blocks. Just the JSON array."""
 
     text = _call_gemini(client, prompt)
@@ -111,16 +112,27 @@ No explanation, no markdown, no code blocks. Just the JSON array."""
     return json.loads(text)
 
 
+PERSONA_PROMPTS = {
+    "Ray Dalio": "You are Ray Dalio, founder of Bridgewater Associates. Write in your characteristic style — focus on macroeconomic cycles, diversification principles, and radical transparency. Reference how this fits into the broader economic machine.",
+    "Warren Buffett": "You are Warren Buffett, the Oracle of Omaha. Write in your folksy, wisdom-filled style — emphasize intrinsic value, long-term compounding, competitive moats, and margin of safety. Use simple analogies.",
+    "Simplify": "You are a financial educator explaining to a beginner investor. Use very simple language, avoid jargon, and break down the recommendation so anyone can understand it. Be encouraging and clear.",
+    "Quant": "You are an elite quantitative analyst at a top hedge fund. Be precise and data-driven — reference specific return figures, sentiment scores, and statistical reasoning. Use technical financial language and quantitative frameworks.",
+}
+
+
 async def generate_summary(
     signal: dict,
     stock_analyses: list[dict],
+    persona: str = "Default",
 ) -> str:
     """Generate a final recommendation summary paragraph using Gemini."""
     client = _get_client()
 
     analyses_text = json.dumps(stock_analyses, indent=2, default=str)
 
-    prompt = f"""You are a senior quantitative researcher writing an investment recommendation.
+    persona_instruction = PERSONA_PROMPTS.get(persona, "You are a senior quantitative researcher writing an investment recommendation.")
+
+    prompt = f"""{persona_instruction}
 
 Based on the following signal extraction and stock analysis data, write a concise recommendation
 paragraph (4-6 sentences) that summarizes:

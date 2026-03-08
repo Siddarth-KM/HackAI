@@ -13,14 +13,14 @@ from app.services.alpha_vantage import get_stock_sentiment
 from app.services.charts import generate_returns_chart
 
 
-async def run_pipeline(raw_text: str) -> AnalysisResponse:
+async def run_pipeline(raw_text: str, persona: str = "Default") -> AnalysisResponse:
     """Run the full text-to-investment-signal pipeline."""
 
     # Step 1: Extract signal from raw text via Gemini
     signal_data = await extract_signal(raw_text)
     signal = SignalExtraction(**signal_data)
 
-    # Step 2: Get S&P 500 list and filter by sector, then select top 5 stocks
+    # Step 2: Get S&P 500 list and filter by sector, then select top 4 stocks
     sp500 = await get_sp500_stocks()
     sector_stocks = filter_by_sector(sp500, signal.sector)
     selected_tickers = await select_stocks(signal_data, sector_stocks)
@@ -77,7 +77,7 @@ async def run_pipeline(raw_text: str) -> AnalysisResponse:
         for sa in stock_analyses
     ]
 
-    summary = await generate_summary(signal_data, analyses_for_summary)
+    summary = await generate_summary(signal_data, analyses_for_summary, persona=persona)
 
     return AnalysisResponse(
         signal=signal,
