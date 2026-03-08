@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, Mic, Sparkles, Loader2, ChevronUp } from 'lucide-react';
+import { Send, Mic, Sparkles, Loader2, ChevronUp, Trash2 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const STORAGE_KEY = 'hackai-chat-history';
@@ -170,9 +170,20 @@ export default function GeminiChat({ context }: GeminiChatProps) {
             <div className="text-xs text-gray-400">Voice or text — powered by Gemini AI</div>
           </div>
         </div>
-        <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronUp className="w-5 h-5 text-gray-400" />
-        </motion.div>
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); clearHistory(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 text-gray-400 hover:bg-red-500/20 hover:text-red-300 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear
+            </button>
+          )}
+          <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronUp className="w-5 h-5 text-gray-400" />
+          </motion.div>
+        </div>
       </button>
 
       {/* Expandable Chat Section */}
@@ -271,14 +282,6 @@ export default function GeminiChat({ context }: GeminiChatProps) {
                 </div>
               </div>
 
-              {/* Clear button */}
-              {messages.length > 0 && (
-                <div className="px-4 pb-3">
-                  <button onClick={clearHistory} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
-                    Clear conversation
-                  </button>
-                </div>
-              )}
             </div>
           </motion.div>
         )}

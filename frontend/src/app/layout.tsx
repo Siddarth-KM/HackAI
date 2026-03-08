@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HackAI Market Intelligence",
+  title: "Sigil - Signal Intelligence",
   description: "Text-to-Investment Signal Pipeline",
 };
 

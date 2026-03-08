@@ -6,7 +6,6 @@ import { motion } from "motion/react";
 import { useState, useRef, useEffect } from "react";
 import useAudioRecorder from "../hooks/useSpeechRecognition";
 import AnalysisResult, { type AnalysisResponsePayload } from "../components/AnalysisResult";
-import GeminiChat from "../components/GeminiChat";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -120,7 +119,7 @@ export default function Landing() {
                 >
                   <BarChart3 className="w-6 h-6 text-emerald-800" />
                 </motion.div>
-                <span className="text-xl font-semibold text-white">HackAI Market Intelligence</span>
+                <span className="text-xl font-semibold text-white">Sigil</span>
               </div>
             </div>
           </motion.nav>
@@ -134,9 +133,7 @@ export default function Landing() {
                 transition={{ duration: 0.8, delay: 0.2 }}
               >
                 <h1 className="text-6xl font-semibold text-white tracking-tight leading-tight">
-                  Market Intelligence
-                  <br />
-                  <span className="text-white/90">Powered by AI</span>
+                  SIGIL <span className="text-white/90">— Signal Intelligence</span>
                 </h1>
               </motion.div>
               
@@ -392,8 +389,7 @@ export default function Landing() {
           {/* Analysis Results */}
           {analysisResult && (
             <div ref={resultsSectionRef} className="w-full max-w-5xl mx-auto mt-12 mb-16 space-y-6">
-              <AnalysisResult data={analysisResult} />
-              <GeminiChat context={analysisResult.summary_recommendation || JSON.stringify(analysisResult.signal)} />
+              <AnalysisResult data={analysisResult} chatContext={analysisResult.summary_recommendation || JSON.stringify(analysisResult.signal)} />
             </div>
           )}
         </div>

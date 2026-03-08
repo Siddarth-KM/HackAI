@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
+import { Download, List, AlignLeft } from 'lucide-react';
+import GeminiChat from './GeminiChat';
 
 // Aligning with the Pydantic models in the backend
 interface SignalExtraction {
@@ -51,6 +53,7 @@ export interface AnalysisResponsePayload {
 
 interface AnalysisResultProps {
   data: AnalysisResponsePayload;
+  chatContext?: string;
 }
 
 const FormatPct = ({ value }: { value: number | null }) => {
@@ -132,10 +135,116 @@ function Card({ children, className = '', delay = 0 }: { children: React.ReactNo
   );
 }
 
-export default function AnalysisResult({ data }: AnalysisResultProps) {
+function getActByDate(timeframe: string): { date: string; urgency: string; color: string } {
+  const now = new Date();
+  const tf = timeframe.toLowerCase().replace(/\s+/g, '');
+  let daysToAct: number;
+
+  if (tf.includes('1month') || tf.includes('1m')) {
+    daysToAct = 1;
+  } else if (tf.includes('3month') || tf.includes('3m')) {
+    daysToAct = 7;
+  } else if (tf.includes('6month') || tf.includes('6m')) {
+    daysToAct = 21;
+  } else if (tf.includes('1year') || tf.includes('1y') || tf.includes('12m')) {
+    daysToAct = 60;
+  } else {
+    daysToAct = 3;
+  }
+
+  const actBy = new Date(now.getTime() + daysToAct * 86400000);
+  const date = actBy.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  let urgency: string;
+  let color: string;
+  if (daysToAct <= 1) {
+    urgency = 'Act today';
+    color = 'text-red-400';
+  } else if (daysToAct <= 7) {
+    urgency = 'Act this week';
+    color = 'text-yellow-400';
+  } else if (daysToAct <= 30) {
+    urgency = 'Act this month';
+    color = 'text-emerald-400';
+  } else {
+    urgency = 'Flexible window';
+    color = 'text-emerald-400';
+  }
+
+  return { date, urgency, color };
+}
+
+function buildReportText(data: AnalysisResponsePayload): string {
+  const lines: string[] = [];
+  const sep = '='.repeat(60);
+
+  lines.push(sep);
+  lines.push('  SIGIL — SIGNAL INTELLIGENCE REPORT');
+  lines.push(`  Generated: ${new Date().toLocaleString()}`);
+  lines.push(sep);
+
+  lines.push('');
+  lines.push('SIGNAL OVERVIEW');
+  lines.push('-'.repeat(40));
+  lines.push(`Direction:    ${data.signal.direction.toUpperCase()}`);
+  lines.push(`Sector:       ${data.signal.sector}`);
+  lines.push(`Timeframe:    ${data.signal.timeframe}`);
+  lines.push(`Reliability:  ${data.signal.reliability_score}/100`);
+  const actBy = getActByDate(data.signal.timeframe);
+  lines.push(`Act By:       ${actBy.date} (${actBy.urgency})`);
+  lines.push('');
+  lines.push(`Summary: ${data.signal.signal_summary}`);
+
+  lines.push('');
+  lines.push('SELECTED STOCKS');
+  lines.push('-'.repeat(40));
+  lines.push(data.selected_stocks.join(', '));
+
+  for (const stock of data.stock_analyses) {
+    const r = stock.returns;
+    lines.push('');
+    lines.push(sep);
+    lines.push(`${r.ticker} — ${r.company_name}`);
+    lines.push(sep);
+    lines.push('');
+    lines.push('Returns:');
+    const fmt = (v: number | null) => v !== null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : 'N/A';
+    lines.push(`  Last Close:  $${r.last_close?.toFixed(2) ?? 'N/A'}`);
+    lines.push(`  1-Week:      ${fmt(r.week_return_pct)}`);
+    lines.push(`  1-Month:     ${fmt(r.month_return_pct)}`);
+    lines.push(`  3-Month:     ${fmt(r.three_month_return_pct)}`);
+    lines.push(`  1-Year:      ${fmt(r.year_return_pct)}`);
+
+    lines.push('');
+    lines.push('Sentiment:');
+    lines.push(`  Average:     ${stock.sentiment.average_sentiment?.toFixed(3) ?? 'N/A'}`);
+    lines.push(`  Articles:    ${stock.sentiment.articles.length}`);
+    if (stock.sentiment.articles.length > 0) {
+      lines.push('');
+      lines.push('  Recent articles:');
+      for (const a of stock.sentiment.articles.slice(0, 5)) {
+        lines.push(`    • ${a.title}`);
+        lines.push(`      Sentiment: ${a.sentiment_score.toFixed(3)}  |  ${a.url}`);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push(sep);
+  lines.push('AI SUMMARY & RECOMMENDATION');
+  lines.push(sep);
+  lines.push('');
+  lines.push(data.summary_recommendation);
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+export default function AnalysisResult({ data, chatContext }: AnalysisResultProps) {
   const [selectedTimeframe, setSelectedTimeframe] = React.useState<Timeframe>('1M');
   const [showCharts, setShowCharts] = React.useState(false);
   const [ttsState, setTtsState] = React.useState<'idle' | 'loading' | 'playing'>('idle');
+  const [bulletMode, setBulletMode] = React.useState(false);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
@@ -217,26 +326,41 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
           <div className="text-center">
             <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Reliability</div>
             <div className="flex items-center gap-2">
-              <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    data.signal.reliability_score >= 70 ? 'bg-emerald-400' :
-                    data.signal.reliability_score >= 40 ? 'bg-yellow-400' : 'bg-red-400'
-                  }`}
-                  style={{ width: `${data.signal.reliability_score}%` }}
-                />
-              </div>
               <span className={`text-lg font-bold ${
                 data.signal.reliability_score >= 70 ? 'text-emerald-400' :
                 data.signal.reliability_score >= 40 ? 'text-yellow-400' : 'text-red-400'
               }`}>
                 {data.signal.reliability_score}
               </span>
+              <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: `${data.signal.reliability_score}%` }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
+                  className={`h-full rounded-full ${
+                    data.signal.reliability_score >= 70 ? 'bg-emerald-400' :
+                    data.signal.reliability_score >= 40 ? 'bg-yellow-400' : 'bg-red-400'
+                  }`}
+                />
+              </div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Timeframe</div>
             <div className="text-lg font-medium text-white">{data.signal.timeframe}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-white/50 uppercase tracking-wide mb-1">Act By</div>
+            {(() => {
+              const { date, urgency, color } = getActByDate(data.signal.timeframe);
+              return (
+                <div>
+                  <div className="text-lg font-medium text-white">{date}</div>
+                  <div className={`text-xs font-semibold ${color}`}>{urgency}</div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </Card>
@@ -370,17 +494,42 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
       <Card className="border-emerald-500/30">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-medium text-emerald-400">AI Summary & Recommendation</h3>
-          <button
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              ttsState === 'playing'
-                ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                : ttsState === 'loading'
-                  ? 'bg-white/10 text-white/50 cursor-wait'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
-            }`}
-            onClick={handleListenToSummary}
-            disabled={ttsState === 'loading'}
-          >
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBulletMode(!bulletMode)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all"
+              title={bulletMode ? 'Show as paragraph' : 'Show as bullet points'}
+            >
+              {bulletMode ? <AlignLeft className="w-4 h-4" /> : <List className="w-4 h-4" />}
+              {bulletMode ? 'Paragraph' : 'Bullets'}
+            </button>
+            <button
+              onClick={() => {
+                const text = buildReportText(data);
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hackai-report-${data.selected_stocks.join('-').toLowerCase()}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all"
+            >
+              <Download className="w-4 h-4" />
+              Download
+            </button>
+            <button
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                ttsState === 'playing'
+                  ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                  : ttsState === 'loading'
+                    ? 'bg-white/10 text-white/50 cursor-wait'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+              }`}
+              onClick={handleListenToSummary}
+              disabled={ttsState === 'loading'}
+            >
             {ttsState === 'loading' && (
               <>
                 <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -405,11 +554,32 @@ export default function AnalysisResult({ data }: AnalysisResultProps) {
                 Listen
               </>
             )}
-          </button>
+            </button>
+          </div>
         </div>
-        <p className="text-white/80 leading-relaxed whitespace-pre-wrap">
-          {data.summary_recommendation}
-        </p>
+        {bulletMode ? (
+          <ul className="space-y-2 text-white/80 leading-relaxed list-none">
+            {data.summary_recommendation
+              .split(/(?<=[.!?])\s+/)
+              .filter(s => s.trim().length > 0)
+              .map((sentence, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-emerald-400 mt-0.5 flex-shrink-0">•</span>
+                  <span>{sentence.trim()}</span>
+                </li>
+              ))}
+          </ul>
+        ) : (
+          <p className="text-white/80 leading-relaxed whitespace-pre-wrap">
+            {data.summary_recommendation}
+          </p>
+        )}
+
+        {chatContext && (
+          <div className="mt-6 border-t border-white/10 pt-6">
+            <GeminiChat context={chatContext} />
+          </div>
+        )}
       </Card>
 
     </div>
